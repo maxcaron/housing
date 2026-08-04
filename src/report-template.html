@@ -182,6 +182,8 @@
   }
   .fpanel .fclear:hover { color: var(--text-primary); }
   .addr-cell { display: flex; align-items: center; gap: 10px; min-width: 200px; }
+  td.eye-cell { text-align: center; }
+  td.eye-cell a { display: inline-flex; align-items: center; justify-content: center; padding: 4px; }
   .thumb { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; flex: none; background: var(--grid); }
   .up { color: var(--delta-bad); }
   .down { color: var(--delta-good); }
@@ -852,6 +854,7 @@ function renderTable() {
         tr.appendChild(td);
       });
       const tdl = document.createElement('td');
+      tdl.className = 'eye-cell';
       tdl.appendChild(centrisEyeLink(l.url));
       tr.appendChild(tdl);
       tb.appendChild(tr);
@@ -929,6 +932,7 @@ function renderGone() {
         tr.appendChild(td);
       });
       const tdl = document.createElement('td');
+      tdl.className = 'eye-cell';
       tdl.appendChild(centrisEyeLink(l.url));
       tr.appendChild(tdl);
       tb.appendChild(tr);
