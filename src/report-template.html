@@ -760,6 +760,16 @@ function addressCell(l) {
   return td;
 }
 const typeLabel = (t) => t === 'lot' ? 'Lot' : 'House';
+function centrisEyeLink(url) {
+  const a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  a.title = 'View on Centris'; a.setAttribute('aria-label', 'View on Centris');
+  a.innerHTML =
+    '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle">' +
+    '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  return a;
+}
 
 // ---------------------------------------------------------------- listings table
 const sort = { key: 'price', dir: -1 };
@@ -842,9 +852,7 @@ function renderTable() {
         tr.appendChild(td);
       });
       const tdl = document.createElement('td');
-      const a = document.createElement('a');
-      a.href = l.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Centris ↗';
-      tdl.appendChild(a);
+      tdl.appendChild(centrisEyeLink(l.url));
       tr.appendChild(tdl);
       tb.appendChild(tr);
     }
@@ -921,9 +929,7 @@ function renderGone() {
         tr.appendChild(td);
       });
       const tdl = document.createElement('td');
-      const a = document.createElement('a');
-      a.href = l.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Centris ↗';
-      tdl.appendChild(a);
+      tdl.appendChild(centrisEyeLink(l.url));
       tr.appendChild(tdl);
       tb.appendChild(tr);
     }
