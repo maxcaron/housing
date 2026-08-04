@@ -134,6 +134,12 @@
   #tooltip .lk { width: 12px; height: 2.5px; border-radius: 2px; display: inline-block; }
 
   #map { height: 420px; border-radius: 8px; background: var(--page); }
+  @media (max-width: 640px) { #map { height: 70vh; } }
+  #map .leaflet-popup-content { margin: 10px 12px; font-size: 12.5px; line-height: 1.45; }
+  #map .popup-photo {
+    width: 100%; max-height: 120px; object-fit: cover;
+    border-radius: 6px; display: block; margin-bottom: 6px;
+  }
   #map-fallback { color: var(--text-muted); padding: 20px 0; display: none; }
 
   table { border-collapse: collapse; width: 100%; font-size: 13px; }
@@ -900,11 +906,13 @@ function renderMap() {
       : `${l.rooms || '?'} rooms · ${l.bedrooms || '?'} bed · ${l.bathrooms || '?'} bath` +
         `${l.year_built ? ' · built ' + l.year_built : ''}${l.lot_size ? ' · ' + l.lot_size.toLocaleString() + ' pc land' : ''}`;
     mk.bindPopup(
-      (l.photo_url ? `<img src="${l.photo_url}" style="width:100%;max-width:236px;border-radius:6px;display:block;margin-bottom:6px" alt="">` : '') +
+      (l.photo_url ? `<img src="${l.photo_url}" class="popup-photo" alt="">` : '') +
       `<b>${fmtMoney(l.price)}</b>${vsAssess}<br>` +
       `${l.address.replace(/[<>&]/g, '')}, ${l.city.replace(/[<>&]/g, '')}<br>` +
       facts + `<br>` +
-      `<a href="${l.url}" target="_blank" rel="noopener">Centris ↗</a>`
+      `<a href="${l.url}" target="_blank" rel="noopener">Centris ↗</a>`,
+      // sized for phones: never wider than the map, popup stays fully in view
+      { maxWidth: Math.min(240, innerWidth - 90), keepInView: true, autoPanPadding: L.point(24, 24) }
     );
     mk.addTo(markerLayer);
     markerByMls.set(l.mls, mk);
