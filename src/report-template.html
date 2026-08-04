@@ -144,6 +144,15 @@
   th.sortable:hover { color: var(--text-primary); }
   tbody tr:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
   .table-scroll { overflow-x: auto; }
+  .filters-row th { padding: 2px 6px 8px; }
+  .filters-row input {
+    width: 100%; min-width: 56px; box-sizing: border-box;
+    font: 11.5px system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 3px 7px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--page); color: var(--text-primary);
+  }
+  .addr-cell { display: flex; align-items: center; gap: 10px; min-width: 200px; }
+  .thumb { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; flex: none; background: var(--grid); }
   .up { color: var(--delta-bad); }
   .down { color: var(--delta-good); }
   .pill { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); }
@@ -168,7 +177,12 @@
       <button data-days="0">All</button>
     </div>
     <select id="area-filter" aria-label="Area"></select>
-    <span class="hint">Range scopes activity (new / changes / delisted); area scopes everything.</span>
+    <select id="type-filter" aria-label="Type">
+      <option value="all">All types</option>
+      <option value="house">Houses</option>
+      <option value="lot">Lots</option>
+    </select>
+    <span class="hint">Range scopes activity (new / changes / delisted); area and type scope everything.</span>
   </div>
 
   <div class="tiles" id="tiles"></div>
@@ -192,7 +206,7 @@
     </div>
     <div class="card full">
       <h2>Map</h2>
-      <p class="desc">Active listings, darker = higher asking price (quintiles)</p>
+      <p class="desc">Houses in blue (darker = higher asking price, quintiles) · lots in brown</p>
       <div id="map"></div>
       <div id="map-fallback">Map tiles need an internet connection.</div>
     </div>
@@ -313,17 +327,17 @@ function hover(el, build) {
 }
 
 // ---------------------------------------------------------------- state
-const state = { area: 'all', days: 30 };
+const state = { area: 'all', type: 'all', days: 30 };
 const areas = [...new Set(DATA.listings.map((l) => l.city))].sort();
-const active = () => DATA.listings.filter((l) =>
-  l.status === 'active' && (state.area === 'all' || l.city === state.area));
+const inScope = (l) => l &&
+  (state.area === 'all' || l.city === state.area) &&
+  (state.type === 'all' || l.type === state.type);
+const active = () => DATA.listings.filter((l) => l.status === 'active' && inScope(l));
 const eventsInRange = () => {
   const cutoff = state.days ? now - state.days * DAY : 0;
   const byMls = new Map(DATA.listings.map((l) => [l.mls, l]));
-  return DATA.events.filter((e) => {
-    const l = byMls.get(e.mls);
-    return new Date(e.at).getTime() >= cutoff && (state.area === 'all' || (l && l.city === state.area));
-  });
+  return DATA.events.filter((e) =>
+    new Date(e.at).getTime() >= cutoff && inScope(byMls.get(e.mls)));
 };
 
 const KINDS = [
@@ -358,6 +372,8 @@ const KINDS = [
     sel.appendChild(o);
   }
   sel.addEventListener('change', () => { state.area = sel.value; renderAll(); });
+  const tsel = $('#type-filter');
+  tsel.addEventListener('change', () => { state.type = tsel.value; renderAll(); });
   $('#rangeset').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -604,25 +620,81 @@ function renderPriceChanges() {
   root.appendChild(table);
 }
 
+// ---------------------------------------------------------------- column filters
+// Numeric columns accept ">500000", "<= 40", or ranges "1990-2005" / "100..200";
+// anything else is a case-insensitive substring match.
+function makePred(raw, isNum) {
+  const s = (raw ?? '').trim();
+  if (!s) return null;
+  if (isNum) {
+    let m;
+    if ((m = s.match(/^(>=|<=|>|<)\s*([\d.,\s]+)$/))) {
+      const n = Number(m[2].replace(/[,\s]/g, ''));
+      const op = m[1];
+      return (v) => v != null && (op === '>' ? v > n : op === '<' ? v < n : op === '>=' ? v >= n : v <= n);
+    }
+    if ((m = s.match(/^([\d.,\s]+?)\s*(?:-|\.\.)\s*([\d.,\s]+)$/))) {
+      const a = Number(m[1].replace(/[,\s]/g, '')), b = Number(m[2].replace(/[,\s]/g, ''));
+      return (v) => v != null && v >= a && v <= b;
+    }
+  }
+  const low = s.toLowerCase();
+  return (v) => v != null && String(v).toLowerCase().includes(low);
+}
+function applyColFilters(rows, cols, filters) {
+  const preds = cols.map((c) => [c.key, makePred(filters[c.key], c.num)]).filter(([, p]) => p);
+  return rows.filter((r) => preds.every(([k, p]) => p(r[k])));
+}
+function filterInputsRow(cols, filters, extraCols, rerenderBody) {
+  const tr = document.createElement('tr');
+  tr.className = 'filters-row';
+  for (const c of cols) {
+    const th = document.createElement('th');
+    const inp = document.createElement('input');
+    inp.type = 'search';
+    inp.placeholder = c.num ? '> < a-b' : 'filter';
+    inp.setAttribute('aria-label', 'Filter ' + c.label);
+    inp.value = filters[c.key] ?? '';
+    inp.addEventListener('input', () => { filters[c.key] = inp.value; rerenderBody(); });
+    th.appendChild(inp);
+    tr.appendChild(th);
+  }
+  for (let i = 0; i < extraCols; i++) tr.appendChild(document.createElement('th'));
+  return tr;
+}
+function addressCell(l) {
+  const td = document.createElement('td');
+  const cell = document.createElement('div');
+  cell.className = 'addr-cell';
+  if (l.photo_url) {
+    const img = document.createElement('img');
+    img.src = l.photo_url; img.className = 'thumb'; img.loading = 'lazy'; img.alt = '';
+    cell.appendChild(img);
+  }
+  const span = document.createElement('span');
+  span.textContent = l.address;
+  cell.appendChild(span);
+  td.appendChild(cell);
+  return td;
+}
+const typeLabel = (t) => t === 'lot' ? 'Lot' : 'House';
+
 // ---------------------------------------------------------------- listings table
 const sort = { key: 'price', dir: -1 };
+const listingFilters = {};
 function renderTable() {
   const root = $('#listings-table');
   root.textContent = '';
-  const rows = active().map((l) => ({
+  const baseRows = active().map((l) => ({
     ...l,
+    type: typeLabel(l.type),
     tracked: daysTracked(l),
     vs_assess: l.assess_total ? Math.round((l.price / l.assess_total) * 100) : null,
   }));
-  rows.sort((a, b) => {
-    const va = a[sort.key], vb = b[sort.key];
-    if (va == null) return 1;
-    if (vb == null) return -1;
-    return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * sort.dir;
-  });
   const cols = [
     { key: 'address', label: 'Address' },
     { key: 'city', label: 'Area' },
+    { key: 'type', label: 'Type' },
     { key: 'price', label: 'Price', num: true },
     { key: 'assess_total', label: 'Assess.', num: true },
     { key: 'vs_assess', label: 'vs assess', num: true },
@@ -650,45 +722,58 @@ function renderTable() {
   }
   trh.appendChild(document.createElement('th'));
   thead.appendChild(trh);
-  table.appendChild(thead);
   const tb = document.createElement('tbody');
-  for (const l of rows) {
-    const tr = document.createElement('tr');
-    if (l.lat && l.lng) {
-      tr.style.cursor = 'pointer';
-      tr.addEventListener('click', (e) => {
-        if (e.target.closest('a')) return; // the Centris link keeps its own behavior
-        focusListing(l.mls);
-      });
-    }
-    const vals = [
-      l.address, l.city, fmtMoney(l.price),
-      l.assess_total ? fmtMoney(l.assess_total) : '—',
-      l.vs_assess ? l.vs_assess + '%' : '—',
-      l.rooms ?? '—', l.bedrooms || '—', l.bathrooms || '—',
-      l.year_built ?? '—',
-      l.lot_size ? l.lot_size.toLocaleString('en-CA') : '—',
-      l.parking_count ?? '—',
-      String(l.tracked),
-    ];
-    vals.forEach((v, i) => {
-      const td = document.createElement('td');
-      if (cols[i] && cols[i].num) td.className = 'num';
-      td.textContent = v;
-      tr.appendChild(td);
+  const renderBody = () => {
+    tb.textContent = '';
+    const rows = applyColFilters(baseRows, cols, listingFilters).sort((a, b) => {
+      const va = a[sort.key], vb = b[sort.key];
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * sort.dir;
     });
-    const tdl = document.createElement('td');
-    const a = document.createElement('a');
-    a.href = l.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Centris ↗';
-    tdl.appendChild(a);
-    tr.appendChild(tdl);
-    tb.appendChild(tr);
-  }
+    for (const l of rows) {
+      const tr = document.createElement('tr');
+      if (l.lat && l.lng) {
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', (e) => {
+          if (e.target.closest('a')) return; // the Centris link keeps its own behavior
+          focusListing(l.mls);
+        });
+      }
+      tr.appendChild(addressCell(l));
+      const vals = [
+        l.city, l.type, fmtMoney(l.price),
+        l.assess_total ? fmtMoney(l.assess_total) : '—',
+        l.vs_assess ? l.vs_assess + '%' : '—',
+        l.rooms ?? '—', l.bedrooms || '—', l.bathrooms || '—',
+        l.year_built ?? '—',
+        l.lot_size ? l.lot_size.toLocaleString('en-CA') : '—',
+        l.parking_count ?? '—',
+        String(l.tracked),
+      ];
+      vals.forEach((v, i) => {
+        const td = document.createElement('td');
+        if (cols[i + 1] && cols[i + 1].num) td.className = 'num';
+        td.textContent = v;
+        tr.appendChild(td);
+      });
+      const tdl = document.createElement('td');
+      const a = document.createElement('a');
+      a.href = l.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Centris ↗';
+      tdl.appendChild(a);
+      tr.appendChild(tdl);
+      tb.appendChild(tr);
+    }
+  };
+  thead.appendChild(filterInputsRow(cols, listingFilters, 1, renderBody));
+  table.appendChild(thead);
   table.appendChild(tb);
+  renderBody();
   root.appendChild(table);
 }
 
 // ---------------------------------------------------------------- sold / delisted table
+const goneFilters = {};
 function renderGone() {
   const root = $('#gone-table');
   root.textContent = '';
@@ -697,43 +782,69 @@ function renderGone() {
   for (const e of DATA.events) {
     if (e.kind === 'delisted' && !delistedAt.has(e.mls)) delistedAt.set(e.mls, e.at);
   }
-  const rows = DATA.listings
-    .filter((l) => l.status === 'delisted' && (state.area === 'all' || l.city === state.area))
+  const baseRows = DATA.listings
+    .filter((l) => l.status === 'delisted' && inScope(l))
     .map((l) => {
       const gone = delistedAt.get(l.mls) ?? l.last_seen;
       const onMarket = Math.max(0, Math.round((new Date(gone) - new Date(l.first_seen)) / DAY));
-      return { ...l, gone, onMarket };
+      return { ...l, type: typeLabel(l.type), gone: gone.slice(0, 10), onMarket };
     })
     .sort((a, b) => b.gone.localeCompare(a.gone));
-  if (!rows.length) {
+  if (!baseRows.length) {
     root.innerHTML = '<div class="empty">Nothing has left the market in this slice yet.</div>';
     return;
   }
+  const cols = [
+    { key: 'gone', label: 'Delisted' },
+    { key: 'address', label: 'Address' },
+    { key: 'city', label: 'Area' },
+    { key: 'type', label: 'Type' },
+    { key: 'price', label: 'Last price', num: true },
+    { key: 'assess_total', label: 'Assess.', num: true },
+    { key: 'onMarket', label: 'On market (days)', num: true },
+  ];
   const table = document.createElement('table');
-  table.innerHTML =
-    '<thead><tr><th>Delisted</th><th>Address</th><th>Area</th><th class="num">Last price</th>' +
-    '<th class="num">Assess.</th><th class="num">On market (days)</th><th></th></tr></thead>';
-  const tb = document.createElement('tbody');
-  for (const l of rows) {
-    const tr = document.createElement('tr');
-    const vals = [
-      l.gone.slice(0, 10), l.address, l.city, fmtMoney(l.price),
-      l.assess_total ? fmtMoney(l.assess_total) : '—', String(l.onMarket),
-    ];
-    vals.forEach((v, i) => {
-      const td = document.createElement('td');
-      if (i >= 3 && i <= 5) td.className = 'num';
-      td.textContent = v;
-      tr.appendChild(td);
-    });
-    const tdl = document.createElement('td');
-    const a = document.createElement('a');
-    a.href = l.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Centris ↗';
-    tdl.appendChild(a);
-    tr.appendChild(tdl);
-    tb.appendChild(tr);
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr');
+  for (const c of cols) {
+    const th = document.createElement('th');
+    if (c.num) th.className = 'num';
+    th.textContent = c.label;
+    trh.appendChild(th);
   }
+  trh.appendChild(document.createElement('th'));
+  thead.appendChild(trh);
+  const tb = document.createElement('tbody');
+  const renderBody = () => {
+    tb.textContent = '';
+    for (const l of applyColFilters(baseRows, cols, goneFilters)) {
+      const tr = document.createElement('tr');
+      const tdDate = document.createElement('td');
+      tdDate.textContent = l.gone;
+      tr.appendChild(tdDate);
+      tr.appendChild(addressCell(l));
+      const vals = [
+        l.city, l.type, fmtMoney(l.price),
+        l.assess_total ? fmtMoney(l.assess_total) : '—', String(l.onMarket),
+      ];
+      vals.forEach((v, i) => {
+        const td = document.createElement('td');
+        if (cols[i + 2] && cols[i + 2].num) td.className = 'num';
+        td.textContent = v;
+        tr.appendChild(td);
+      });
+      const tdl = document.createElement('td');
+      const a = document.createElement('a');
+      a.href = l.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Centris ↗';
+      tdl.appendChild(a);
+      tr.appendChild(tdl);
+      tb.appendChild(tr);
+    }
+  };
+  thead.appendChild(filterInputsRow(cols, goneFilters, 1, renderBody));
+  table.appendChild(thead);
   table.appendChild(tb);
+  renderBody();
   root.appendChild(table);
 }
 
@@ -772,20 +883,27 @@ function renderMap() {
   markerLayer = L.layerGroup().addTo(map);
   markerByMls.clear();
   if (!pts.length) return;
-  const prices = pts.map((p) => p.price).sort((a, b) => a - b);
-  const qs = [0.2, 0.4, 0.6, 0.8].map((q) => prices[Math.floor(q * (prices.length - 1))]);
+  const LOT_BROWN = '#8a5a2b';
+  const housePrices = pts.filter((p) => p.type !== 'lot').map((p) => p.price).sort((a, b) => a - b);
+  const qs = housePrices.length
+    ? [0.2, 0.4, 0.6, 0.8].map((q) => housePrices[Math.floor(q * (housePrices.length - 1))])
+    : [];
   for (const l of pts) {
     const mk = L.circleMarker([l.lat, l.lng], {
       // ring matches the tiles (always light), not the page surface
       radius: 7, weight: 2, color: '#ffffff',
-      fillColor: quintileColor(l.price, qs), fillOpacity: 1,
+      fillColor: l.type === 'lot' ? LOT_BROWN : quintileColor(l.price, qs), fillOpacity: 1,
     });
     const vsAssess = l.assess_total ? ` · ${Math.round((l.price / l.assess_total) * 100)}% of assess.` : '';
+    const facts = l.type === 'lot'
+      ? `Lot${l.lot_size ? ' · ' + l.lot_size.toLocaleString() + ' pc' : ''}`
+      : `${l.rooms || '?'} rooms · ${l.bedrooms || '?'} bed · ${l.bathrooms || '?'} bath` +
+        `${l.year_built ? ' · built ' + l.year_built : ''}${l.lot_size ? ' · ' + l.lot_size.toLocaleString() + ' pc land' : ''}`;
     mk.bindPopup(
+      (l.photo_url ? `<img src="${l.photo_url}" style="width:100%;max-width:236px;border-radius:6px;display:block;margin-bottom:6px" alt="">` : '') +
       `<b>${fmtMoney(l.price)}</b>${vsAssess}<br>` +
       `${l.address.replace(/[<>&]/g, '')}, ${l.city.replace(/[<>&]/g, '')}<br>` +
-      `${l.rooms || '?'} rooms · ${l.bedrooms || '?'} bed · ${l.bathrooms || '?'} bath` +
-      `${l.year_built ? ' · built ' + l.year_built : ''}${l.lot_size ? ' · ' + l.lot_size.toLocaleString() + ' pc land' : ''}<br>` +
+      facts + `<br>` +
       `<a href="${l.url}" target="_blank" rel="noopener">Centris ↗</a>`
     );
     mk.addTo(markerLayer);

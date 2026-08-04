@@ -6,20 +6,147 @@
       "SearchName": "",
       "UseGeographyShapes": 0,
       "Filters": [
-        { "MatchType": "CityDistrictNeighbourhoodSearch", "Text": "Quartier Notre-Dame-des-Laurentides, Québec (Charlesbourg)", "Id": "A;280" },
-        { "MatchType": "CityDistrictNeighbourhoodSearch", "Text": "Quartier Lac-Saint-Charles, Québec (La Haute-Saint-Charles)", "Id": "C;281" },
-        { "MatchType": "CityDistrict", "Text": "Lac-Beauport", "Id": "273" },
-        { "MatchType": "CityDistrict", "Text": "Sainte-Brigitte-de-Laval", "Id": "274" }
+        {
+          "MatchType": "CityDistrictNeighbourhoodSearch",
+          "Text": "Quartier Notre-Dame-des-Laurentides, Québec (Charlesbourg)",
+          "Id": "A;280"
+        },
+        {
+          "MatchType": "CityDistrictNeighbourhoodSearch",
+          "Text": "Quartier Lac-Saint-Charles, Québec (La Haute-Saint-Charles)",
+          "Id": "C;281"
+        },
+        {
+          "MatchType": "CityDistrict",
+          "Text": "Lac-Beauport",
+          "Id": "273"
+        },
+        {
+          "MatchType": "CityDistrict",
+          "Text": "Sainte-Brigitte-de-Laval",
+          "Id": "274"
+        }
       ],
       "FieldsValues": [
-        { "fieldId": "CityDistrictNeighbourhoodSearch", "value": "A;280", "fieldConditionId": "", "valueConditionId": "" },
-        { "fieldId": "CityDistrictNeighbourhoodSearch", "value": "C;281", "fieldConditionId": "", "valueConditionId": "" },
-        { "fieldId": "CityDistrict", "value": "273", "fieldConditionId": "", "valueConditionId": "" },
-        { "fieldId": "CityDistrict", "value": "274", "fieldConditionId": "", "valueConditionId": "" },
-        { "fieldId": "Category", "value": "Residential", "fieldConditionId": "", "valueConditionId": "" },
-        { "fieldId": "SellingType", "value": "Sale", "fieldConditionId": "", "valueConditionId": "" },
-        { "fieldId": "PropertyType", "value": "SingleFamilyHome", "fieldConditionId": "", "valueConditionId": "" }
+        {
+          "fieldId": "CityDistrictNeighbourhoodSearch",
+          "value": "A;280",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "CityDistrictNeighbourhoodSearch",
+          "value": "C;281",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "CityDistrict",
+          "value": "273",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "CityDistrict",
+          "value": "274",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "Category",
+          "value": "Residential",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "SellingType",
+          "value": "Sale",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "PropertyType",
+          "value": "SingleFamilyHome",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        }
       ]
-    }
+    },
+    "type": "house"
+  },
+  {
+    "name": "quebec-nord-lots",
+    "label": "Terrains — NDL/Charlesbourg, Lac-St-Charles, Lac-Beauport, Ste-Brigitte-de-Laval",
+    "query": {
+      "SearchName": "",
+      "UseGeographyShapes": 0,
+      "Filters": [
+        {
+          "MatchType": "CityDistrictNeighbourhoodSearch",
+          "Text": "Quartier Notre-Dame-des-Laurentides, Québec (Charlesbourg)",
+          "Id": "A;280"
+        },
+        {
+          "MatchType": "CityDistrictNeighbourhoodSearch",
+          "Text": "Quartier Lac-Saint-Charles, Québec (La Haute-Saint-Charles)",
+          "Id": "C;281"
+        },
+        {
+          "MatchType": "CityDistrict",
+          "Text": "Lac-Beauport",
+          "Id": "273"
+        },
+        {
+          "MatchType": "CityDistrict",
+          "Text": "Sainte-Brigitte-de-Laval",
+          "Id": "274"
+        }
+      ],
+      "FieldsValues": [
+        {
+          "fieldId": "CityDistrictNeighbourhoodSearch",
+          "value": "A;280",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "CityDistrictNeighbourhoodSearch",
+          "value": "C;281",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "CityDistrict",
+          "value": "273",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "CityDistrict",
+          "value": "274",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "Category",
+          "value": "Residential",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "SellingType",
+          "value": "Sale",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "PropertyType",
+          "value": "ResidentialLot",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        }
+      ]
+    },
+    "type": "lot"
   }
 ]

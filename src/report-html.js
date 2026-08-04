@@ -12,7 +12,7 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const db = openDb();
 
 const listings = db.prepare(`
-  SELECT mls, search, url, address, city, lat, lng, bedrooms, bathrooms,
+  SELECT mls, search, type, photo_url, url, address, city, lat, lng, bedrooms, bathrooms,
          rooms, year_built, living_area, lot_size, parking, parking_count,
          assess_year, assess_lot, assess_building, assess_total,
          first_seen, last_seen, current_price AS price, status

@@ -23,8 +23,10 @@ node src/decode-url.js "<url>"     # turn a Centris search URL into query JSON
 
 The dashboard (`data/report.html`) is a single self-contained file — open it in a
 browser. It has KPI tiles, price distribution, per-area inventory, an activity
-timeline, a map (needs internet for tiles), price-change and listings tables, an
-area filter + date range, and light/dark themes. It also shows a stale-data
+timeline, a map (houses in blue price quintiles, lots in brown; needs internet
+for tiles), price-change / listings / sold-delisted tables with thumbnails and
+per-column filters (`>500000`, `1990-2005`, or plain text), global area + type +
+date-range filters, and light/dark themes. It also shows a stale-data
 banner when the last crawl failed or is older than 48h. Regenerate it after each
 crawl (add `&& node src/report-html.js` to the cron line).
 

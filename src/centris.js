@@ -133,6 +133,7 @@ export function parseCards(html, page) {
     const lat = card.match(/data-lat="([0-9.-]+)"/)?.[1];
     const lng = card.match(/data-lng="([0-9.-]+)"/)?.[1];
     const category = card.match(/class="category"[^>]*>\s*<div[^>]*>([\s\S]*?)</)?.[1];
+    const photo = card.match(/<img itemprop="image" src="([^"]+)"/)?.[1]?.replace(/&amp;/g, '&') ?? null;
     listings.push({
       mls,
       price,
@@ -144,6 +145,7 @@ export function parseCards(html, page) {
       bedrooms: Number(card.match(/class='cac'>(\d+)</)?.[1] ?? null),
       bathrooms: Number(card.match(/class='sdb'>(\d+)</)?.[1] ?? null),
       category: category ? decodeEntities(category) : null,
+      photo,
     });
   }
   return listings;

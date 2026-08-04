@@ -73,6 +73,8 @@ export function openDb() {
     assess_building: 'INTEGER',
     assess_total: 'INTEGER',
     detail_fetched_at: 'TEXT',
+    type: 'TEXT',      // house | lot — from the search's config entry
+    photo_url: 'TEXT', // Centris thumbnail (mspublic.centris.ca)
   };
   for (const [col, type] of Object.entries(wanted)) {
     if (!have.has(col)) db.exec(`ALTER TABLE listing ADD COLUMN ${col} ${type}`);
@@ -111,20 +113,22 @@ export function lastOkCount(db, search) {
 }
 
 // Apply one successful crawl atomically; returns event counts for the run summary.
+// `search` is the config entry ({name, type, ...}).
 export function applyCrawl(db, runId, search, listings) {
   const now = new Date().toISOString();
   const stats = { listed: 0, price_change: 0, delisted: 0, relisted: 0, unchanged: 0 };
 
   const getListing = db.prepare(`SELECT mls, current_price, status FROM listing WHERE mls = ?`);
   const insertListing = db.prepare(`
-    INSERT INTO listing (mls, search, url, address, city, lat, lng, bedrooms, bathrooms, category,
-                         first_seen, last_seen, current_price, status)
-    VALUES (@mls, @search, @url, @address, @city, @lat, @lng, @bedrooms, @bathrooms, @category,
-            @now, @now, @price, 'active')
+    INSERT INTO listing (mls, search, type, url, address, city, lat, lng, bedrooms, bathrooms, category,
+                         photo_url, first_seen, last_seen, current_price, status)
+    VALUES (@mls, @search, @type, @url, @address, @city, @lat, @lng, @bedrooms, @bathrooms, @category,
+            @photo, @now, @now, @price, 'active')
   `);
   const touchListing = db.prepare(`
-    UPDATE listing SET last_seen = ?, current_price = ?, status = 'active',
-                       url = ?, address = ?, city = ?, lat = ?, lng = ?, bedrooms = ?, bathrooms = ?
+    UPDATE listing SET last_seen = ?, current_price = ?, status = 'active', type = ?,
+                       url = ?, address = ?, city = ?, lat = ?, lng = ?, bedrooms = ?, bathrooms = ?,
+                       photo_url = COALESCE(?, photo_url)
     WHERE mls = ?
   `);
   const insertEvent = db.prepare(`
@@ -137,7 +141,7 @@ export function applyCrawl(db, runId, search, listings) {
     for (const l of listings.values()) {
       const prev = getListing.get(l.mls);
       if (!prev) {
-        insertListing.run({ ...l, search, now });
+        insertListing.run({ ...l, search: search.name, type: search.type, now });
         insertEvent.run(l.mls, now, 'listed', l.price, null, runId);
         stats.listed++;
         log.info('event_listed', { mls: l.mls, price: l.price, address: l.address });
@@ -159,9 +163,9 @@ export function applyCrawl(db, runId, search, listings) {
         });
       }
       if (prev.status === 'active' && prev.current_price === l.price) stats.unchanged++;
-      touchListing.run(now, l.price, l.url, l.address, l.city, l.lat, l.lng, l.bedrooms, l.bathrooms, l.mls);
+      touchListing.run(now, l.price, search.type, l.url, l.address, l.city, l.lat, l.lng, l.bedrooms, l.bathrooms, l.photo, l.mls);
     }
-    for (const row of activeMls.all(search)) {
+    for (const row of activeMls.all(search.name)) {
       if (!listings.has(row.mls)) {
         markDelisted.run(row.mls);
         insertEvent.run(row.mls, now, 'delisted', row.current_price, null, runId);

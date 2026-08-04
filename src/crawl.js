@@ -80,7 +80,7 @@ async function runOne(db, search) {
     }
 
     const rawFile = archiveRaw(search.name, rawPages);
-    const stats = applyCrawl(db, runId, search.name, listings);
+    const stats = applyCrawl(db, runId, search, listings);
     const details = await fetchMissingDetails(db, search.name);
     runFinish(db, runId, { status: 'ok', count });
     log.info('crawl_ok', { search: search.name, count, raw: path.relative(ROOT, rawFile), ...stats, ...details });
