@@ -150,13 +150,37 @@
   th.sortable:hover { color: var(--text-primary); }
   tbody tr:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
   .table-scroll { overflow-x: auto; }
-  .filters-row th { padding: 2px 6px 8px; }
-  .filters-row input {
-    width: 100%; min-width: 56px; box-sizing: border-box;
-    font: 11.5px system-ui, -apple-system, "Segoe UI", sans-serif;
-    padding: 3px 7px; border: 1px solid var(--border); border-radius: 6px;
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .fpop-wrap { position: relative; flex: none; }
+  .fbtn {
+    font: 13px system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface-1); color: var(--text-secondary); cursor: pointer;
+  }
+  .fbtn:hover { color: var(--text-primary); }
+  .fbtn[data-active="true"] { background: var(--series-1); color: #fff; border-color: transparent; }
+  .fpanel {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 500;
+    width: min(320px, calc(100vw - 64px)); max-height: 60vh; overflow-y: auto;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.25); padding: 14px 16px;
+  }
+  .fpanel .frow { margin-bottom: 10px; }
+  .fpanel label { display: block; font-size: 11.5px; color: var(--text-muted); margin-bottom: 3px; }
+  .fpanel input {
+    width: 100%; box-sizing: border-box;
+    font: 13px system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
     background: var(--page); color: var(--text-primary);
   }
+  .fpanel .minmax { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fpanel .fclear {
+    width: 100%; margin-top: 4px; padding: 6px 0;
+    font: 12.5px system-ui, -apple-system, "Segoe UI", sans-serif;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: transparent; color: var(--text-secondary); cursor: pointer;
+  }
+  .fpanel .fclear:hover { color: var(--text-primary); }
   .addr-cell { display: flex; align-items: center; gap: 10px; min-width: 200px; }
   .thumb { width: 56px; height: 42px; object-fit: cover; border-radius: 6px; flex: none; background: var(--grid); }
   .up { color: var(--delta-bad); }
@@ -222,13 +246,23 @@
       <div class="table-scroll" id="price-changes"></div>
     </div>
     <div class="card full">
-      <h2>Listings</h2>
-      <p class="desc">Click a column to sort, a row to locate it on the map. “Days” counts days since first seen by this tool.</p>
+      <div class="card-top">
+        <div>
+          <h2>Listings</h2>
+          <p class="desc">Click a column to sort, a row to locate it on the map. “Days” counts days since first seen by this tool.</p>
+        </div>
+        <div class="fpop-wrap" id="listings-fpop"></div>
+      </div>
       <div class="table-scroll" id="listings-table"></div>
     </div>
     <div class="card full">
-      <h2>Sold / delisted</h2>
-      <p class="desc">Listings that disappeared from Centris — sold or withdrawn (Centris doesn’t say which). “On market” counts from first seen to delisting.</p>
+      <div class="card-top">
+        <div>
+          <h2>Sold / delisted</h2>
+          <p class="desc">Listings that disappeared from Centris — sold or withdrawn (Centris doesn’t say which). “On market” counts from first seen to delisting.</p>
+        </div>
+        <div class="fpop-wrap" id="gone-fpop"></div>
+      </div>
       <div class="table-scroll" id="gone-table"></div>
     </div>
   </div>
@@ -627,53 +661,88 @@ function renderPriceChanges() {
 }
 
 // ---------------------------------------------------------------- column filters
-// Numeric columns accept ">500000", "<= 40", or ranges "1990-2005" / "100..200";
-// anything else is a case-insensitive substring match.
-function makePred(raw, isNum) {
-  const s = (raw ?? '').trim();
-  if (!s) return null;
-  if (isNum) {
-    let m;
-    // a half-typed expression ("＞", "1990-") must not hide everything —
-    // filter only once the expression is complete enough to mean something
-    if (/^(>=|<=|>|<|=)\s*$/.test(s)) return null;
-    if ((m = s.match(/^(>=|<=|>|<)\s*([\d.,\s]+)$/))) {
-      const n = Number(m[2].replace(/[,\s]/g, ''));
-      const op = m[1];
-      return (v) => v != null && (op === '>' ? v > n : op === '<' ? v < n : op === '>=' ? v >= n : v <= n);
-    }
-    if ((m = s.match(/^([\d.,\s]+?)\s*(?:-|\.\.)\s*([\d.,\s]+)$/))) {
-      const a = Number(m[1].replace(/[,\s]/g, '')), b = Number(m[2].replace(/[,\s]/g, ''));
-      return (v) => v != null && v >= a && v <= b;
-    }
-    if ((m = s.match(/^([\d.,\s]+?)\s*(?:-|\.\.)$/))) { // "1990-" mid-typing → lower bound only
-      const a = Number(m[1].replace(/[,\s]/g, ''));
-      return (v) => v != null && v >= a;
-    }
-  }
-  const low = s.toLowerCase();
-  return (v) => v != null && String(v).toLowerCase().includes(low);
+// Filters live in a popup per table: text columns get a "contains" input,
+// numeric columns get explicit Min / Max inputs. State per column:
+// text -> string, numeric -> {min: '', max: ''}.
+function colFilterActive(c, f) {
+  if (f == null) return false;
+  return c.num ? (String(f.min ?? '') !== '' || String(f.max ?? '') !== '') : String(f).trim() !== '';
 }
 function applyColFilters(rows, cols, filters) {
-  const preds = cols.map((c) => [c.key, makePred(filters[c.key], c.num)]).filter(([, p]) => p);
-  return rows.filter((r) => preds.every(([k, p]) => p(r[k])));
+  const act = cols.filter((c) => colFilterActive(c, filters[c.key]));
+  if (!act.length) return rows;
+  return rows.filter((r) => act.every((c) => {
+    const f = filters[c.key], v = r[c.key];
+    if (c.num) {
+      if (v == null) return false;
+      if (String(f.min ?? '') !== '' && v < Number(f.min)) return false;
+      if (String(f.max ?? '') !== '' && v > Number(f.max)) return false;
+      return true;
+    }
+    return v != null && String(v).toLowerCase().includes(String(f).trim().toLowerCase());
+  }));
 }
-function filterInputsRow(cols, filters, extraCols, rerenderBody) {
-  const tr = document.createElement('tr');
-  tr.className = 'filters-row';
-  for (const c of cols) {
-    const th = document.createElement('th');
+// One popup per table, built once — typing re-renders only the table body,
+// so the panel and its focus are never disturbed.
+const openPanels = [];
+document.addEventListener('click', (e) => {
+  for (const { wrap, panel } of openPanels) {
+    if (!panel.hidden && !wrap.contains(e.target)) panel.hidden = true;
+  }
+});
+function buildFilterPopup(wrapId, cols, filters, onChange) {
+  const wrap = $('#' + wrapId);
+  const btn = document.createElement('button');
+  btn.className = 'fbtn';
+  const panel = document.createElement('div');
+  panel.className = 'fpanel';
+  panel.hidden = true;
+  const refreshBtn = () => {
+    const n = cols.filter((c) => colFilterActive(c, filters[c.key])).length;
+    btn.textContent = n ? `Filters (${n})` : 'Filters ▾';
+    btn.dataset.active = String(n > 0);
+  };
+  const mkInput = (placeholder, value, apply) => {
     const inp = document.createElement('input');
     inp.type = 'search';
-    inp.placeholder = c.num ? '> < a-b' : 'filter';
-    inp.setAttribute('aria-label', 'Filter ' + c.label);
-    inp.value = filters[c.key] ?? '';
-    inp.addEventListener('input', () => { filters[c.key] = inp.value; rerenderBody(); });
-    th.appendChild(inp);
-    tr.appendChild(th);
+    inp.inputMode = placeholder === 'contains…' ? 'text' : 'numeric';
+    inp.placeholder = placeholder;
+    inp.value = value ?? '';
+    inp.addEventListener('input', () => { apply(inp.value); refreshBtn(); onChange(); });
+    return inp;
+  };
+  for (const c of cols) {
+    const row = document.createElement('div');
+    row.className = 'frow';
+    const label = document.createElement('label');
+    label.textContent = c.label;
+    row.appendChild(label);
+    if (c.num) {
+      filters[c.key] = filters[c.key] ?? { min: '', max: '' };
+      const pair = document.createElement('div');
+      pair.className = 'minmax';
+      pair.appendChild(mkInput('Min', filters[c.key].min, (v) => { filters[c.key].min = v; }));
+      pair.appendChild(mkInput('Max', filters[c.key].max, (v) => { filters[c.key].max = v; }));
+      row.appendChild(pair);
+    } else {
+      row.appendChild(mkInput('contains…', filters[c.key], (v) => { filters[c.key] = v; }));
+    }
+    panel.appendChild(row);
   }
-  for (let i = 0; i < extraCols; i++) tr.appendChild(document.createElement('th'));
-  return tr;
+  const clear = document.createElement('button');
+  clear.className = 'fclear';
+  clear.textContent = 'Clear all';
+  clear.addEventListener('click', () => {
+    for (const c of cols) filters[c.key] = c.num ? { min: '', max: '' } : '';
+    for (const inp of panel.querySelectorAll('input')) inp.value = '';
+    refreshBtn();
+    onChange();
+  });
+  panel.appendChild(clear);
+  btn.addEventListener('click', () => { panel.hidden = !panel.hidden; });
+  wrap.append(btn, panel);
+  openPanels.push({ wrap, panel });
+  refreshBtn();
 }
 function addressCell(l) {
   const td = document.createElement('td');
@@ -695,6 +764,22 @@ const typeLabel = (t) => t === 'lot' ? 'Lot' : 'House';
 // ---------------------------------------------------------------- listings table
 const sort = { key: 'price', dir: -1 };
 const listingFilters = {};
+const LISTING_COLS = [
+  { key: 'address', label: 'Address' },
+  { key: 'city', label: 'Area' },
+  { key: 'type', label: 'Type' },
+  { key: 'price', label: 'Price', num: true },
+  { key: 'assess_total', label: 'Assess.', num: true },
+  { key: 'vs_assess', label: 'vs assess', num: true },
+  { key: 'rooms', label: 'Rooms', num: true },
+  { key: 'bedrooms', label: 'Beds', num: true },
+  { key: 'bathrooms', label: 'Baths', num: true },
+  { key: 'year_built', label: 'Year', num: true },
+  { key: 'lot_size', label: 'Land (pc)', num: true },
+  { key: 'parking_count', label: 'Park', num: true },
+  { key: 'tracked', label: 'Days', num: true },
+];
+let renderListingBody = () => {};
 function renderTable() {
   const root = $('#listings-table');
   root.textContent = '';
@@ -704,21 +789,7 @@ function renderTable() {
     tracked: daysTracked(l),
     vs_assess: l.assess_total ? Math.round((l.price / l.assess_total) * 100) : null,
   }));
-  const cols = [
-    { key: 'address', label: 'Address' },
-    { key: 'city', label: 'Area' },
-    { key: 'type', label: 'Type' },
-    { key: 'price', label: 'Price', num: true },
-    { key: 'assess_total', label: 'Assess.', num: true },
-    { key: 'vs_assess', label: 'vs assess', num: true },
-    { key: 'rooms', label: 'Rooms', num: true },
-    { key: 'bedrooms', label: 'Beds', num: true },
-    { key: 'bathrooms', label: 'Baths', num: true },
-    { key: 'year_built', label: 'Year', num: true },
-    { key: 'lot_size', label: 'Land (pc)', num: true },
-    { key: 'parking_count', label: 'Park', num: true },
-    { key: 'tracked', label: 'Days', num: true },
-  ];
+  const cols = LISTING_COLS;
   const table = document.createElement('table');
   const thead = document.createElement('thead');
   const trh = document.createElement('tr');
@@ -778,15 +849,25 @@ function renderTable() {
       tb.appendChild(tr);
     }
   };
-  thead.appendChild(filterInputsRow(cols, listingFilters, 1, renderBody));
   table.appendChild(thead);
   table.appendChild(tb);
+  renderListingBody = renderBody;
   renderBody();
   root.appendChild(table);
 }
 
 // ---------------------------------------------------------------- sold / delisted table
 const goneFilters = {};
+const GONE_COLS = [
+  { key: 'gone', label: 'Delisted' },
+  { key: 'address', label: 'Address' },
+  { key: 'city', label: 'Area' },
+  { key: 'type', label: 'Type' },
+  { key: 'price', label: 'Last price', num: true },
+  { key: 'assess_total', label: 'Assess.', num: true },
+  { key: 'onMarket', label: 'On market (days)', num: true },
+];
+let renderGoneBody = () => {};
 function renderGone() {
   const root = $('#gone-table');
   root.textContent = '';
@@ -805,17 +886,10 @@ function renderGone() {
     .sort((a, b) => b.gone.localeCompare(a.gone));
   if (!baseRows.length) {
     root.innerHTML = '<div class="empty">Nothing has left the market in this slice yet.</div>';
+    renderGoneBody = () => {};
     return;
   }
-  const cols = [
-    { key: 'gone', label: 'Delisted' },
-    { key: 'address', label: 'Address' },
-    { key: 'city', label: 'Area' },
-    { key: 'type', label: 'Type' },
-    { key: 'price', label: 'Last price', num: true },
-    { key: 'assess_total', label: 'Assess.', num: true },
-    { key: 'onMarket', label: 'On market (days)', num: true },
-  ];
+  const cols = GONE_COLS;
   const table = document.createElement('table');
   const thead = document.createElement('thead');
   const trh = document.createElement('tr');
@@ -854,9 +928,9 @@ function renderGone() {
       tb.appendChild(tr);
     }
   };
-  thead.appendChild(filterInputsRow(cols, goneFilters, 1, renderBody));
   table.appendChild(thead);
   table.appendChild(tb);
+  renderGoneBody = renderBody;
   renderBody();
   root.appendChild(table);
 }
@@ -941,6 +1015,8 @@ function renderAll() {
   renderGone();
   renderMap();
 }
+buildFilterPopup('listings-fpop', LISTING_COLS, listingFilters, () => renderListingBody());
+buildFilterPopup('gone-fpop', GONE_COLS, goneFilters, () => renderGoneBody());
 renderAll();
 </script>
 </body>
