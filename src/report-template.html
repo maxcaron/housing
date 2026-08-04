@@ -206,6 +206,11 @@
       <p class="desc">Click a column to sort, a row to locate it on the map. “Days” counts days since first seen by this tool.</p>
       <div class="table-scroll" id="listings-table"></div>
     </div>
+    <div class="card full">
+      <h2>Sold / delisted</h2>
+      <p class="desc">Listings that disappeared from Centris — sold or withdrawn (Centris doesn’t say which). “On market” counts from first seen to delisting.</p>
+      <div class="table-scroll" id="gone-table"></div>
+    </div>
   </div>
 </div>
 
@@ -683,6 +688,55 @@ function renderTable() {
   root.appendChild(table);
 }
 
+// ---------------------------------------------------------------- sold / delisted table
+function renderGone() {
+  const root = $('#gone-table');
+  root.textContent = '';
+  // latest delisted event per MLS (DATA.events is sorted newest-first)
+  const delistedAt = new Map();
+  for (const e of DATA.events) {
+    if (e.kind === 'delisted' && !delistedAt.has(e.mls)) delistedAt.set(e.mls, e.at);
+  }
+  const rows = DATA.listings
+    .filter((l) => l.status === 'delisted' && (state.area === 'all' || l.city === state.area))
+    .map((l) => {
+      const gone = delistedAt.get(l.mls) ?? l.last_seen;
+      const onMarket = Math.max(0, Math.round((new Date(gone) - new Date(l.first_seen)) / DAY));
+      return { ...l, gone, onMarket };
+    })
+    .sort((a, b) => b.gone.localeCompare(a.gone));
+  if (!rows.length) {
+    root.innerHTML = '<div class="empty">Nothing has left the market in this slice yet.</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.innerHTML =
+    '<thead><tr><th>Delisted</th><th>Address</th><th>Area</th><th class="num">Last price</th>' +
+    '<th class="num">Assess.</th><th class="num">On market (days)</th><th></th></tr></thead>';
+  const tb = document.createElement('tbody');
+  for (const l of rows) {
+    const tr = document.createElement('tr');
+    const vals = [
+      l.gone.slice(0, 10), l.address, l.city, fmtMoney(l.price),
+      l.assess_total ? fmtMoney(l.assess_total) : '—', String(l.onMarket),
+    ];
+    vals.forEach((v, i) => {
+      const td = document.createElement('td');
+      if (i >= 3 && i <= 5) td.className = 'num';
+      td.textContent = v;
+      tr.appendChild(td);
+    });
+    const tdl = document.createElement('td');
+    const a = document.createElement('a');
+    a.href = l.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Centris ↗';
+    tdl.appendChild(a);
+    tr.appendChild(tdl);
+    tb.appendChild(tr);
+  }
+  table.appendChild(tb);
+  root.appendChild(table);
+}
+
 // ---------------------------------------------------------------- map
 let map = null, markerLayer = null;
 const markerByMls = new Map();
@@ -751,6 +805,7 @@ function renderAll() {
   renderEvents();
   renderPriceChanges();
   renderTable();
+  renderGone();
   renderMap();
 }
 renderAll();
