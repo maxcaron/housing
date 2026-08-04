@@ -634,6 +634,9 @@ function makePred(raw, isNum) {
   if (!s) return null;
   if (isNum) {
     let m;
+    // a half-typed expression ("＞", "1990-") must not hide everything —
+    // filter only once the expression is complete enough to mean something
+    if (/^(>=|<=|>|<|=)\s*$/.test(s)) return null;
     if ((m = s.match(/^(>=|<=|>|<)\s*([\d.,\s]+)$/))) {
       const n = Number(m[2].replace(/[,\s]/g, ''));
       const op = m[1];
@@ -642,6 +645,10 @@ function makePred(raw, isNum) {
     if ((m = s.match(/^([\d.,\s]+?)\s*(?:-|\.\.)\s*([\d.,\s]+)$/))) {
       const a = Number(m[1].replace(/[,\s]/g, '')), b = Number(m[2].replace(/[,\s]/g, ''));
       return (v) => v != null && v >= a && v <= b;
+    }
+    if ((m = s.match(/^([\d.,\s]+?)\s*(?:-|\.\.)$/))) { // "1990-" mid-typing → lower bound only
+      const a = Number(m[1].replace(/[,\s]/g, ''));
+      return (v) => v != null && v >= a;
     }
   }
   const low = s.toLowerCase();
