@@ -28,14 +28,25 @@ area filter + date range, and light/dark themes. It also shows a stale-data
 banner when the last crawl failed or is older than 48h. Regenerate it after each
 crawl (add `&& node src/report-html.js` to the cron line).
 
-Schedule it daily (the diff is what creates history — no crawl, no data):
+## Daily automation & hosting
+
+`bin/daily.sh` runs the whole pipeline: crawl → regenerate dashboard → copy to
+`docs/index.html` → commit & push. GitHub Pages serves `docs/` on `main`, so the
+push is the deploy. The dashboard is regenerated and published **even when the
+crawl fails** — its stale-data banner reaching the hosted page is the alerting.
+
+It's scheduled via launchd at 06:30 daily (`bin/launchd.plist.example`,
+installed at `~/Library/LaunchAgents/com.maximecaron.housing.plist`); launchd
+runs a missed job when the Mac wakes, which cron would skip. Output lands in
+`logs/launchd.log`. Manage it with:
 
 ```sh
-# crontab -e
-30 6 * * * cd ~/Development/housing && /usr/local/bin/node src/crawl.js >> logs/cron.log 2>&1
+launchctl kickstart gui/$UID/com.maximecaron.housing   # run now
+launchctl bootout   gui/$UID ~/Library/LaunchAgents/com.maximecaron.housing.plist  # disable
 ```
 
-`crawl.js` exits non-zero if any search failed, so a scheduler can alert on it.
+`crawl.js` exits non-zero if any search failed, so the run status is also
+visible in `launchctl list` and the `run` table.
 
 ## Adding a search
 
