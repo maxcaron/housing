@@ -887,7 +887,7 @@ function renderMap() {
   }
   const pts = active().filter((l) => l.lat && l.lng);
   if (!map) {
-    map = L.map('map', { scrollWheelZoom: true });
+    map = L.map('map', { scrollWheelZoom: true, zoomControl: false });
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18, attribution: '&copy; OpenStreetMap contributors',
     }).addTo(map);
