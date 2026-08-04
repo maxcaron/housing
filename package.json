@@ -1,0 +1,16 @@
+{
+  "name": "housing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tracks Centris for-sale listings over time: prices, corrections, days on market, delistings.",
+  "scripts": {
+    "crawl": "node src/crawl.js",
+    "report": "node src/report.js",
+    "decode-url": "node src/decode-url.js",
+    "html": "node src/report-html.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0"
+  }
+}
