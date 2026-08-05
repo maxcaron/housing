@@ -1180,7 +1180,9 @@
       { key: 'city', label: 'Area' },
       { key: 'type', label: 'Type' },
       { key: 'price', label: 'Price', num: true },
-      { key: 'assess_total', label: 'Assess.', num: true },
+      { key: 'assess_lot', label: 'Eval. lot', num: true },
+      { key: 'assess_building', label: 'Eval. home', num: true },
+      { key: 'assess_total', label: 'Eval. total', num: true },
       { key: 'vs_assess', label: 'vs assess', num: true },
       { key: 'rooms', label: 'Rooms', num: true },
       { key: 'bedrooms', label: 'Beds', num: true },
@@ -1238,6 +1240,8 @@
           tr.appendChild(addressCell(l));
           const vals = [
             l.city, l.type, fmtMoney(l.price),
+            l.assess_lot ? fmtMoney(l.assess_lot) : '—',
+            l.assess_building ? fmtMoney(l.assess_building) : '—',
             l.assess_total ? fmtMoney(l.assess_total) : '—',
             l.vs_assess ? l.vs_assess + '%' : '—',
             l.rooms ?? '—', l.bedrooms || '—', l.bathrooms || '—',
@@ -1274,7 +1278,9 @@
       { key: 'city', label: 'Area' },
       { key: 'type', label: 'Type' },
       { key: 'price', label: 'Last price', num: true },
-      { key: 'assess_total', label: 'Assess.', num: true },
+      { key: 'assess_lot', label: 'Eval. lot', num: true },
+      { key: 'assess_building', label: 'Eval. home', num: true },
+      { key: 'assess_total', label: 'Eval. total', num: true },
       { key: 'onMarket', label: 'On market (days)', num: true },
     ];
     let renderGoneBody = () => {};
@@ -1322,6 +1328,8 @@
           tr.appendChild(addressCell(l));
           const vals = [
             l.city, l.type, fmtMoney(l.price),
+            l.assess_lot ? fmtMoney(l.assess_lot) : '—',
+            l.assess_building ? fmtMoney(l.assess_building) : '—',
             l.assess_total ? fmtMoney(l.assess_total) : '—', String(l.onMarket),
           ];
           vals.forEach((v, i) => {
