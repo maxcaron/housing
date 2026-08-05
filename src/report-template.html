@@ -1283,8 +1283,9 @@
         return v != null && String(v).toLowerCase().includes(String(f).trim().toLowerCase());
       }));
     }
-    // One popup per table, built once — typing re-renders only the table body,
-    // so the panel and its focus are never disturbed.
+    // One popup per table, built once. Filters commit on blur / Enter / the
+    // native clear button — not per keystroke, so rows don't vanish while a
+    // value is half-typed.
     const openPanels = [];
     document.addEventListener('click', (e) => {
       for (const { wrap, panel } of openPanels) {
@@ -1313,7 +1314,9 @@
         inp.inputMode = placeholder === 'contains…' ? 'text' : 'numeric';
         inp.placeholder = placeholder;
         inp.value = value ?? '';
-        inp.addEventListener('input', () => { apply(inp.value); refreshBtn(); updateRest(); onChange(); });
+        const commit = () => { apply(inp.value); refreshBtn(); updateRest(); onChange(); };
+        inp.addEventListener('change', commit);
+        inp.addEventListener('search', commit);
         return inp;
       };
       const mkRow = (c) => {
