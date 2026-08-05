@@ -1394,6 +1394,7 @@
       const pts = active().filter((l) => l.lat && l.lng);
       if (!map) {
         map = L.map('map', { scrollWheelZoom: true, zoomControl: false });
+        map.on('dragstart', () => map.closePopup());
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 18, attribution: '&copy; OpenStreetMap contributors',
         }).addTo(map);
