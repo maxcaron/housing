@@ -49,7 +49,7 @@ export function openDb() {
       id        INTEGER PRIMARY KEY AUTOINCREMENT,
       mls       TEXT NOT NULL,
       at        TEXT NOT NULL,
-      kind      TEXT NOT NULL, -- listed | price_change | delisted | relisted
+      kind      TEXT NOT NULL, -- listed | price_change | delisted | relisted | renumbered
       price     INTEGER,
       old_price INTEGER,
       run_id    INTEGER,
@@ -75,10 +75,13 @@ export function openDb() {
     detail_fetched_at: 'TEXT',
     type: 'TEXT',      // house | lot — from the search's config entry
     photo_url: 'TEXT', // Centris thumbnail (mspublic.centris.ca)
+    renumbered_to: 'TEXT', // set when a broker relists under a fresh MLS number
   };
   for (const [col, type] of Object.entries(wanted)) {
     if (!have.has(col)) db.exec(`ALTER TABLE listing ADD COLUMN ${col} ${type}`);
   }
+  const haveEvent = new Set(db.prepare(`PRAGMA table_info(event)`).all().map((c) => c.name));
+  if (!haveEvent.has('old_mls')) db.exec(`ALTER TABLE event ADD COLUMN old_mls TEXT`);
   return db;
 }
 
@@ -114,16 +117,19 @@ export function lastOkCount(db, search) {
 
 // Apply one successful crawl atomically; returns event counts for the run summary.
 // `search` is the config entry ({name, type, ...}).
+// A new MLS matching a same-run vanished listing (same address, city, price) is a
+// broker relisting under a fresh number to reset days-on-market — recorded as one
+// `renumbered` event instead of delisted+listed, with first_seen carried forward.
 export function applyCrawl(db, runId, search, listings) {
   const now = new Date().toISOString();
-  const stats = { listed: 0, price_change: 0, delisted: 0, relisted: 0, unchanged: 0 };
+  const stats = { listed: 0, price_change: 0, delisted: 0, relisted: 0, renumbered: 0, unchanged: 0 };
 
   const getListing = db.prepare(`SELECT mls, current_price, status FROM listing WHERE mls = ?`);
   const insertListing = db.prepare(`
     INSERT INTO listing (mls, search, type, url, address, city, lat, lng, bedrooms, bathrooms, category,
                          photo_url, first_seen, last_seen, current_price, status)
     VALUES (@mls, @search, @type, @url, @address, @city, @lat, @lng, @bedrooms, @bathrooms, @category,
-            @photo, @now, @now, @price, 'active')
+            @photo, @first_seen, @now, @price, 'active')
   `);
   const touchListing = db.prepare(`
     UPDATE listing SET last_seen = ?, current_price = ?, status = 'active', type = ?,
@@ -132,28 +138,50 @@ export function applyCrawl(db, runId, search, listings) {
     WHERE mls = ?
   `);
   const insertEvent = db.prepare(`
-    INSERT INTO event (mls, at, kind, price, old_price, run_id) VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO event (mls, at, kind, price, old_price, old_mls, run_id) VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  const activeMls = db.prepare(`SELECT mls, current_price FROM listing WHERE search = ? AND status = 'active'`);
+  const activeRows = db.prepare(
+    `SELECT mls, address, city, current_price, first_seen FROM listing WHERE search = ? AND status = 'active'`
+  );
   const markDelisted = db.prepare(`UPDATE listing SET status = 'delisted' WHERE mls = ?`);
+  const markRenumbered = db.prepare(`UPDATE listing SET status = 'renumbered', renumbered_to = ? WHERE mls = ?`);
 
   db.transaction(() => {
+    const vanished = activeRows.all(search.name).filter((r) => !listings.has(r.mls));
+    const vanishedByKey = new Map();
+    for (const r of vanished) {
+      const key = `${r.address}|${r.city}|${r.current_price}`;
+      if (!vanishedByKey.has(key)) vanishedByKey.set(key, []);
+      vanishedByKey.get(key).push(r);
+    }
+    const renumberedMls = new Set();
     for (const l of listings.values()) {
       const prev = getListing.get(l.mls);
       if (!prev) {
-        insertListing.run({ ...l, search: search.name, type: search.type, now });
-        insertEvent.run(l.mls, now, 'listed', l.price, null, runId);
-        stats.listed++;
-        log.info('event_listed', { mls: l.mls, price: l.price, address: l.address });
+        const old = (vanishedByKey.get(`${l.address}|${l.city}|${l.price}`) ?? [])
+          .find((r) => !renumberedMls.has(r.mls));
+        if (old) {
+          renumberedMls.add(old.mls);
+          markRenumbered.run(l.mls, old.mls);
+          insertListing.run({ ...l, search: search.name, type: search.type, now, first_seen: old.first_seen });
+          insertEvent.run(l.mls, now, 'renumbered', l.price, old.current_price, old.mls, runId);
+          stats.renumbered++;
+          log.info('event_renumbered', { mls: l.mls, old_mls: old.mls, price: l.price, address: l.address });
+        } else {
+          insertListing.run({ ...l, search: search.name, type: search.type, now, first_seen: now });
+          insertEvent.run(l.mls, now, 'listed', l.price, null, null, runId);
+          stats.listed++;
+          log.info('event_listed', { mls: l.mls, price: l.price, address: l.address });
+        }
         continue;
       }
-      if (prev.status === 'delisted') {
-        insertEvent.run(l.mls, now, 'relisted', l.price, prev.current_price, runId);
+      if (prev.status !== 'active') {
+        insertEvent.run(l.mls, now, 'relisted', l.price, prev.current_price, null, runId);
         stats.relisted++;
         log.info('event_relisted', { mls: l.mls, price: l.price, address: l.address });
       }
-      if (prev.current_price !== l.price && prev.status !== 'delisted') {
-        insertEvent.run(l.mls, now, 'price_change', l.price, prev.current_price, runId);
+      if (prev.current_price !== l.price && prev.status === 'active') {
+        insertEvent.run(l.mls, now, 'price_change', l.price, prev.current_price, null, runId);
         stats.price_change++;
         log.info('event_price_change', {
           mls: l.mls,
@@ -165,13 +193,12 @@ export function applyCrawl(db, runId, search, listings) {
       if (prev.status === 'active' && prev.current_price === l.price) stats.unchanged++;
       touchListing.run(now, l.price, search.type, l.url, l.address, l.city, l.lat, l.lng, l.bedrooms, l.bathrooms, l.photo, l.mls);
     }
-    for (const row of activeMls.all(search.name)) {
-      if (!listings.has(row.mls)) {
-        markDelisted.run(row.mls);
-        insertEvent.run(row.mls, now, 'delisted', row.current_price, null, runId);
-        stats.delisted++;
-        log.info('event_delisted', { mls: row.mls, last_price: row.current_price });
-      }
+    for (const row of vanished) {
+      if (renumberedMls.has(row.mls)) continue;
+      markDelisted.run(row.mls);
+      insertEvent.run(row.mls, now, 'delisted', row.current_price, null, null, runId);
+      stats.delisted++;
+      log.info('event_delisted', { mls: row.mls, last_price: row.current_price });
     }
   })();
 

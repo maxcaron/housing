@@ -20,7 +20,7 @@ const listings = db.prepare(`
 `).all();
 
 const events = db.prepare(`
-  SELECT mls, at, kind, price, old_price FROM event ORDER BY at DESC
+  SELECT mls, at, kind, price, old_price, old_mls FROM event ORDER BY at DESC
 `).all();
 
 const searches = db.prepare(`SELECT DISTINCT search FROM listing ORDER BY search`).all().map((r) => r.search);

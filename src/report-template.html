@@ -25,6 +25,8 @@
       /* delisted */
       --series-4: #eda100;
       /* relisted */
+      --series-5: #9257d4;
+      /* renumbered */
       --delta-good: #006300;
       --delta-bad: #d03b3b;
       --seq-1: #86b6ef;
@@ -49,6 +51,7 @@
         --series-2: #d95926;
         --series-3: #199e70;
         --series-4: #c98500;
+        --series-5: #a06ee0;
         --delta-good: #0ca30c;
         --delta-bad: #e66767;
       }
@@ -68,6 +71,7 @@
       --series-2: #d95926;
       --series-3: #199e70;
       --series-4: #c98500;
+      --series-5: #a06ee0;
       --delta-good: #0ca30c;
       --delta-bad: #e66767;
     }
@@ -771,6 +775,7 @@
       { kind: 'price_change', label: 'Price change', color: 'var(--series-2)' },
       { kind: 'delisted', label: 'Delisted', color: 'var(--series-3)' },
       { kind: 'relisted', label: 'Relisted', color: 'var(--series-4)' },
+      { kind: 'renumbered', label: 'New MLS №', color: 'var(--series-5)' },
     ];
 
     // ---------------------------------------------------------------- header
@@ -938,7 +943,7 @@
       const days = [];
       for (let t = start; t <= now + 1; t += DAY) days.push(dayKey(t));
       const idx = new Map(days.map((d, i) => [d, i]));
-      const stacks = days.map(() => ({ listed: 0, price_change: 0, delisted: 0, relisted: 0 }));
+      const stacks = days.map(() => ({ listed: 0, price_change: 0, delisted: 0, relisted: 0, renumbered: 0 }));
       for (const e of ev) {
         const i = idx.get(e.at.slice(0, 10));
         if (i !== undefined) stacks[i][e.kind]++;
@@ -1204,7 +1209,14 @@
       { key: 'parking_count', label: 'Park', num: true },
       { key: 'tracked', label: 'Days', num: true },
       { key: 'first_seen', label: 'First seen', desc: true },
+      { key: 'relisted', label: 'Relisted', desc: true },
     ];
+    const latestRelistAt = new Map();
+    for (const e of DATA.events) {
+      if ((e.kind === 'relisted' || e.kind === 'renumbered') && !latestRelistAt.has(e.mls)) {
+        latestRelistAt.set(e.mls, e.at);
+      }
+    }
     let renderListingBody = () => {};
     function renderTable() {
       const root = $('#listings-table');
@@ -1214,6 +1226,7 @@
         type: typeLabel(l.type),
         tracked: daysTracked(l),
         first_seen: l.first_seen.slice(0, 16).replace('T', ' '),
+        relisted: latestRelistAt.get(l.mls)?.slice(0, 10) ?? null,
         vs_assess: l.assess_total ? Math.round((l.price / l.assess_total) * 100) : null,
       }));
       const cols = LISTING_COLS;
@@ -1264,6 +1277,7 @@
             l.parking_count ?? '—',
             String(l.tracked),
             l.first_seen,
+            l.relisted ?? '—',
           ];
           vals.forEach((v, i) => {
             const td = document.createElement('td');
