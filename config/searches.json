@@ -1,7 +1,7 @@
 [
   {
     "name": "quebec-nord",
-    "label": "Maisons unifamiliales — NDL/Charlesbourg, Lac-St-Charles, Lac-Beauport, Ste-Brigitte-de-Laval",
+    "label": "Maisons unifamiliales — NDL/Charlesbourg, Lac-St-Charles, Lac-Beauport, Ste-Brigitte-de-Laval, Stoneham",
     "query": {
       "SearchName": "",
       "UseGeographyShapes": 0,
@@ -25,6 +25,11 @@
           "MatchType": "CityDistrict",
           "Text": "Sainte-Brigitte-de-Laval",
           "Id": "274"
+        },
+        {
+          "MatchType": "CityDistrict",
+          "Text": "Stoneham-et-Tewkesbury",
+          "Id": "272"
         }
       ],
       "FieldsValues": [
@@ -49,6 +54,12 @@
         {
           "fieldId": "CityDistrict",
           "value": "274",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "CityDistrict",
+          "value": "272",
           "fieldConditionId": "",
           "valueConditionId": ""
         },
@@ -76,7 +87,7 @@
   },
   {
     "name": "quebec-nord-lots",
-    "label": "Terrains — NDL/Charlesbourg, Lac-St-Charles, Lac-Beauport, Ste-Brigitte-de-Laval",
+    "label": "Terrains — NDL/Charlesbourg, Lac-St-Charles, Lac-Beauport, Ste-Brigitte-de-Laval, Stoneham",
     "query": {
       "SearchName": "",
       "UseGeographyShapes": 0,
@@ -100,6 +111,11 @@
           "MatchType": "CityDistrict",
           "Text": "Sainte-Brigitte-de-Laval",
           "Id": "274"
+        },
+        {
+          "MatchType": "CityDistrict",
+          "Text": "Stoneham-et-Tewkesbury",
+          "Id": "272"
         }
       ],
       "FieldsValues": [
@@ -124,6 +140,12 @@
         {
           "fieldId": "CityDistrict",
           "value": "274",
+          "fieldConditionId": "",
+          "valueConditionId": ""
+        },
+        {
+          "fieldId": "CityDistrict",
+          "value": "272",
           "fieldConditionId": "",
           "valueConditionId": ""
         },

@@ -72,11 +72,17 @@ async function runOne(db, search) {
     // A wild swing vs the last good run is treated as an error, not data.
     const prev = lastOkCount(db, search.name);
     if (prev !== undefined && prev >= 10 && (count > prev * 2 || count < prev * 0.5)) {
-      throw new ContractError('count_swing', `result count swung from ${prev} to ${count} — filters silently dropped?`, {
-        search: search.name,
-        previous: prev,
-        current: count,
-      });
+      // --accept-count-swing: for intentional search-config changes (new area,
+      // new filters), where a big jump is expected — accepts the new baseline once
+      if (process.argv.includes('--accept-count-swing')) {
+        log.warn('count_swing_accepted', { search: search.name, previous: prev, current: count });
+      } else {
+        throw new ContractError('count_swing', `result count swung from ${prev} to ${count} — filters silently dropped?`, {
+          search: search.name,
+          previous: prev,
+          current: count,
+        });
+      }
     }
 
     const rawFile = archiveRaw(search.name, rawPages);
