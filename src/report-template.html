@@ -355,7 +355,10 @@
     }
 
     table {
-      border-collapse: collapse;
+      /* separate (not collapse): collapsed borders detach from position:sticky
+         headers and scroll away with the rows */
+      border-collapse: separate;
+      border-spacing: 0;
       width: 100%;
       font-size: 13px;
     }
@@ -393,7 +396,16 @@
     }
 
     .table-scroll {
-      overflow-x: auto;
+      /* the table scrolls inside its card so the header row can stick */
+      overflow: auto;
+      max-height: 78vh;
+    }
+
+    .table-scroll thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--surface-1);
     }
 
     .card-top {
