@@ -1203,6 +1203,7 @@
       { key: 'lot_size', label: 'Land (pc)', num: true },
       { key: 'parking_count', label: 'Park', num: true },
       { key: 'tracked', label: 'Days', num: true },
+      { key: 'first_seen', label: 'First seen', desc: true },
     ];
     let renderListingBody = () => {};
     function renderTable() {
@@ -1212,6 +1213,7 @@
         ...l,
         type: typeLabel(l.type),
         tracked: daysTracked(l),
+        first_seen: l.first_seen.slice(0, 16).replace('T', ' '),
         vs_assess: l.assess_total ? Math.round((l.price / l.assess_total) * 100) : null,
       }));
       const cols = LISTING_COLS;
@@ -1223,7 +1225,7 @@
         th.className = 'sortable' + (c.num ? ' num' : '');
         th.textContent = c.label + (sort.key === c.key ? (sort.dir < 0 ? ' ↓' : ' ↑') : '');
         th.addEventListener('click', () => {
-          sort.dir = sort.key === c.key ? -sort.dir : (c.num ? -1 : 1);
+          sort.dir = sort.key === c.key ? -sort.dir : (c.num || c.desc ? -1 : 1);
           sort.key = c.key;
           renderTable();
         });
@@ -1261,6 +1263,7 @@
             l.lot_size ? l.lot_size.toLocaleString('en-CA') : '—',
             l.parking_count ?? '—',
             String(l.tracked),
+            l.first_seen,
           ];
           vals.forEach((v, i) => {
             const td = document.createElement('td');
