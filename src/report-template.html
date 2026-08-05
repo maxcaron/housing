@@ -27,6 +27,7 @@
       /* relisted */
       --series-5: #9257d4;
       /* renumbered */
+      --lot: #a15c1e;
       --delta-good: #006300;
       --delta-bad: #d03b3b;
       --seq-1: #86b6ef;
@@ -52,6 +53,7 @@
         --series-3: #199e70;
         --series-4: #c98500;
         --series-5: #a06ee0;
+        --lot: #b26a24;
         --delta-good: #0ca30c;
         --delta-bad: #e66767;
       }
@@ -72,6 +74,7 @@
       --series-3: #199e70;
       --series-4: #c98500;
       --series-5: #a06ee0;
+      --lot: #b26a24;
       --delta-good: #0ca30c;
       --delta-bad: #e66767;
     }
@@ -264,6 +267,62 @@
     .hit:focus-visible {
       stroke: var(--series-1);
       stroke-width: 2;
+    }
+
+    .evalwrap {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .evalwrap>div:first-child {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .statrail {
+      flex: none;
+      width: 150px;
+      border-left: 1px solid var(--grid);
+      padding-left: 16px;
+      font-size: 12px;
+    }
+
+    .statrail .sr-head {
+      font-size: 13px;
+      font-weight: 650;
+      margin-bottom: 6px;
+    }
+
+    .statrail .sr-row {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-secondary);
+      padding: 1.5px 0;
+    }
+
+    .statrail .sr-row span:last-child {
+      font-variant-numeric: tabular-nums;
+      color: var(--text-primary);
+    }
+
+    .statrail .sr-note {
+      margin-top: 8px;
+      color: var(--text-muted);
+      font-size: 11.5px;
+    }
+
+    @media (max-width: 640px) {
+      .evalwrap {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .statrail {
+        width: auto;
+        border-left: 0;
+        padding-left: 0;
+      }
     }
 
     .legend {
@@ -617,6 +676,16 @@
         <div id="chart-areas"></div>
       </div>
       <div class="card full">
+        <h2>Asking price vs. municipal evaluation</h2>
+        <p class="desc">Active listings binned by asking price as a share of the municipal eval — 100% means priced at
+          eval. Evals lag the market; lots are assessed far below asking.</p>
+        <div class="evalwrap">
+          <div id="chart-vs-eval"></div>
+          <div class="statrail" id="vs-eval-rail"></div>
+        </div>
+        <div class="legend" id="vs-eval-legend"></div>
+      </div>
+      <div class="card full">
         <h2>Activity over time</h2>
         <p class="desc">Events per day in the selected range</p>
         <div id="chart-events"></div>
@@ -891,6 +960,147 @@
         svg.appendChild(hit);
       });
       root.appendChild(svg);
+    }
+
+    // ---------------------------------------------------------------- ask vs eval histogram
+    const MIN_PLAUSIBLE_EVAL = 10000; // below this, assess_total is a Centris parse artifact (e.g. "$2"), not a real eval
+    const EVAL_SERIES = [
+      { key: 'house', label: 'Houses', color: 'var(--series-1)' },
+      { key: 'lot', label: 'Lots', color: 'var(--lot)' },
+    ];
+    function renderVsEval() {
+      const root = $('#chart-vs-eval');
+      const rail = $('#vs-eval-rail');
+      const legend = $('#vs-eval-legend');
+      root.textContent = ''; rail.textContent = ''; legend.textContent = '';
+      const act = active().filter((l) => l.price > 0);
+      const usable = act.filter((l) => l.assess_total >= MIN_PLAUSIBLE_EVAL);
+      const excluded = act.length - usable.length;
+      if (!usable.length) {
+        root.innerHTML = '<div class="empty">No listings with a municipal eval in this slice.</div>';
+        return;
+      }
+
+      const pctOf = (l) => (l.price / l.assess_total) * 100;
+      const LO = 80, HI = 250, STEP = 10;
+      const nBins = (HI - LO) / STEP + 2; // + underflow and overflow bins
+      const binOf = (v) => v < LO ? 0 : Math.min(1 + Math.floor((v - LO) / STEP), nBins - 1);
+      const bins = Array.from({ length: nBins }, () => ({ house: 0, lot: 0 }));
+      for (const l of usable) bins[binOf(pctOf(l))][l.type === 'lot' ? 'lot' : 'house']++;
+
+      const pcts = usable.map(pctOf).sort((a, b) => a - b);
+      const q = (p) => pcts[Math.floor(p * (pcts.length - 1))];
+      const med = median(pcts);
+
+      const W = 1120, H = 250, m = { t: 24, r: 8, b: 30, l: 30 };
+      const iw = W - m.l - m.r, ih = H - m.t - m.b;
+      const svg = svgEl('svg', { class: 'chart', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Histogram of asking price as percent of municipal evaluation' });
+      const totals = bins.map((b) => b.house + b.lot);
+      const ticks = cleanTicks(Math.max(...totals), 4);
+      const yMax = ticks[ticks.length - 1];
+      const y = (v) => m.t + ih - (v / yMax) * ih;
+      const band = iw / nBins;
+      const bw = Math.min(38, band - 3);
+      const GAP = 2;
+      const xOf = (v) => Math.max(m.l, Math.min(W - m.r, m.l + band * (1 + (v - LO) / STEP)));
+
+      for (const t of ticks) {
+        svg.appendChild(svgEl('line', { x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), stroke: t === 0 ? 'var(--baseline)' : 'var(--grid)', 'stroke-width': 1 }));
+        const lbl = svgEl('text', { x: m.l - 6, y: y(t) + 3.5, 'text-anchor': 'end', class: 'tick' });
+        lbl.textContent = String(t);
+        svg.appendChild(lbl);
+      }
+      for (let v = LO + 20; v <= HI - STEP; v += 20) {
+        const lbl = svgEl('text', { x: xOf(v), y: H - m.b + 16, 'text-anchor': 'middle', class: 'tick' });
+        lbl.textContent = v + '%';
+        svg.appendChild(lbl);
+      }
+      for (const [i, txt] of [[0, '<80%'], [nBins - 1, '250%+']]) {
+        const lbl = svgEl('text', { x: m.l + i * band + band / 2, y: H - m.b + 16, 'text-anchor': 'middle', class: 'tick' });
+        lbl.textContent = txt;
+        svg.appendChild(lbl);
+      }
+
+      const maxIdx = totals.indexOf(Math.max(...totals));
+      bins.forEach((b, i) => {
+        const x = m.l + i * band + (band - bw) / 2;
+        let cursor = y(0);
+        EVAL_SERIES.forEach((s, si) => {
+          const v = b[s.key];
+          if (!v) return;
+          const hPx = (v / yMax) * ih;
+          const isTop = EVAL_SERIES.slice(si + 1).every((ss) => b[ss.key] === 0);
+          const yTop = cursor - hPx;
+          const hDraw = Math.max(1, hPx - (cursor === y(0) ? 0 : GAP));
+          if (isTop) svg.appendChild(svgEl('path', { d: columnPath(x, yTop, bw, hDraw, 4), fill: s.color }));
+          else svg.appendChild(svgEl('rect', { x, y: yTop, width: bw, height: hDraw, fill: s.color }));
+          cursor = yTop;
+        });
+        if (i === maxIdx && totals[i] > 0) {
+          const lbl = svgEl('text', { x: x + bw / 2, y: y(totals[i]) - 5, 'text-anchor': 'middle', class: 'dlabel' });
+          lbl.textContent = String(totals[i]);
+          svg.appendChild(lbl);
+        }
+        const rangeLbl = i === 0 ? 'under 80% of eval'
+          : i === nBins - 1 ? '250%+ of eval'
+            : `${LO + (i - 1) * STEP}–${LO + i * STEP}% of eval`;
+        const hit = svgEl('rect', { x: m.l + i * band, y: m.t, width: band, height: ih, class: 'hit' });
+        hover(hit, (t) => {
+          const head = document.createElement('div');
+          head.className = 't-lbl'; head.textContent = rangeLbl;
+          t.appendChild(head);
+          if (!totals[i]) { tipRow(t, { value: '0', label: 'listings' }); return; }
+          for (const s of EVAL_SERIES) if (b[s.key]) tipRow(t, { value: String(b[s.key]), label: s.label.toLowerCase(), color: css(s.color.slice(4, -1)) });
+        });
+        svg.appendChild(hit);
+      });
+
+      const evalX = xOf(100), medX = xOf(med);
+      const refLine = (x, stroke, dash) => svgEl('line', { x1: x, x2: x, y1: m.t, y2: y(0), stroke, 'stroke-width': 1, ...(dash ? { 'stroke-dasharray': dash } : {}) });
+      const refLabel = (x, txt, anchor) => {
+        const lbl = svgEl('text', { x: x + (anchor === 'start' ? 5 : -5), y: m.t - 8, 'text-anchor': anchor, class: 'tick' });
+        lbl.textContent = txt;
+        return lbl;
+      };
+      svg.appendChild(refLine(evalX, 'var(--text-muted)'));
+      svg.appendChild(refLine(medX, 'var(--text-secondary)', '4,3'));
+      svg.appendChild(refLabel(evalX, 'at eval', medX >= evalX ? 'end' : 'start'));
+      svg.appendChild(refLabel(medX, `median ${Math.round(med)}%`, medX >= evalX ? 'start' : 'end'));
+      root.appendChild(svg);
+
+      const head = document.createElement('div');
+      head.className = 'sr-head';
+      head.textContent = `${pcts.length} listing${pcts.length === 1 ? '' : 's'}`;
+      rail.appendChild(head);
+      const stats = [['min', q(0)], ['p25', q(0.25)], ['median', med], ['p75', q(0.75)], ['p90', q(0.9)], ['max', q(1)]];
+      for (const [name, v] of stats) {
+        const row = document.createElement('div');
+        row.className = 'sr-row';
+        const k = document.createElement('span'); k.textContent = name;
+        const val = document.createElement('span'); val.textContent = Math.round(v) + '%';
+        row.append(k, val);
+        rail.appendChild(row);
+      }
+      if (excluded) {
+        const note = document.createElement('div');
+        note.className = 'sr-note';
+        note.textContent = `${excluded} listing${excluded === 1 ? '' : 's'} without a usable eval excluded`;
+        rail.appendChild(note);
+      }
+
+      const present = EVAL_SERIES.filter((s) => bins.some((b) => b[s.key]));
+      if (present.length > 1) {
+        for (const s of present) {
+          const key = document.createElement('span');
+          key.className = 'key';
+          const sw = document.createElement('span');
+          sw.className = 'sw'; sw.style.background = s.color;
+          const lbl = document.createElement('span');
+          lbl.textContent = s.label;
+          key.append(sw, lbl);
+          legend.appendChild(key);
+        }
+      }
     }
 
     // ---------------------------------------------------------------- areas bar chart (emphasis on selected)
@@ -1282,6 +1492,7 @@
           vals.forEach((v, i) => {
             const td = document.createElement('td');
             if (cols[i + 1] && cols[i + 1].num) td.className = 'num';
+            if (cols[i + 1] && cols[i + 1].key === 'vs_assess' && l.vs_assess != null && l.vs_assess < 100) td.classList.add('down');
             td.textContent = v;
             tr.appendChild(td);
           });
@@ -1417,7 +1628,7 @@
       markerLayer = L.layerGroup().addTo(map);
       markerByMls.clear();
       if (!pts.length) return;
-      const LOT_BROWN = '#8a5a2b';
+      const LOT_BROWN = '#a15c1e';
       const housePrices = pts.filter((p) => p.type !== 'lot').map((p) => p.price).sort((a, b) => a - b);
       const qs = housePrices.length
         ? [0.2, 0.4, 0.6, 0.8].map((q) => housePrices[Math.floor(q * (housePrices.length - 1))])
@@ -1455,6 +1666,7 @@
     function renderAll() {
       renderTiles();
       renderHistogram();
+      renderVsEval();
       renderAreas();
       renderEvents();
       renderPriceChanges();
