@@ -669,7 +669,7 @@
           <h1>Housing tracker</h1>
           <div class="sub" id="subtitle"></div>
         </div>
-        <button type="button" id="refresh" class="refresh" title="Fetch the latest published data">Refresh</button>
+        <button type="button" id="refresh" class="refresh" title="Fetch the latest published data" hidden>Refresh</button>
       </div>
       <div class="stale" id="stale" hidden></div>
     </header>
@@ -887,6 +887,10 @@
         s.appendChild(document.createTextNode(DATA.staleWarning));
       }
       const refreshButton = $('#refresh');
+      const launchedFromHomeScreen =
+        navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+      const hasTouchScreen = matchMedia('(pointer: coarse)').matches;
+      refreshButton.hidden = !(launchedFromHomeScreen || hasTouchScreen);
       refreshButton.addEventListener('click', () => {
         refreshButton.disabled = true;
         refreshButton.textContent = 'Refreshing…';
