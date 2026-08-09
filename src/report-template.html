@@ -228,7 +228,7 @@
       color: #fff;
     }
 
-    .cog[aria-expanded="true"] {
+    .cog[data-filtered="true"] {
       background: var(--series-1);
       border-color: transparent;
       color: #fff;
@@ -1011,6 +1011,7 @@
     // the same slice of the market.
     const STORE_KEY = 'housing-view-state';
     const state = { area: 'all', type: 'all', days: 0, view: 'listings' };
+    const FILTER_DEFAULTS = { area: state.area, type: state.type, days: state.days };
     const areas = [...new Set(DATA.listings.map((l) => l.city))].sort();
     const saveState = () => {
       try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch { }
@@ -1078,10 +1079,16 @@
         sel.appendChild(o);
       }
       sel.value = state.area;
-      sel.addEventListener('change', () => { state.area = sel.value; saveState(); renderAll(); });
+      sel.addEventListener('change', () => {
+        state.area = sel.value;
+        saveState(); syncFilterIndicator(); renderAll();
+      });
       const tsel = $('#type-filter');
       tsel.value = state.type;
-      tsel.addEventListener('change', () => { state.type = tsel.value; saveState(); renderAll(); });
+      tsel.addEventListener('change', () => {
+        state.type = tsel.value;
+        saveState(); syncFilterIndicator(); renderAll();
+      });
       const rangeset = $('#rangeset');
       for (const b of rangeset.querySelectorAll('button')) {
         b.setAttribute('aria-pressed', String(Number(b.dataset.days) === state.days));
@@ -1092,6 +1099,7 @@
         state.days = Number(b.dataset.days);
         for (const x of rangeset.querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
         saveState();
+        syncFilterIndicator();
         renderAll();
       });
     }
@@ -1114,6 +1122,13 @@
     });
 
     // ---------------------------------------------------------------- filter dock
+    // The cog reads as active whenever the dashboard is showing a narrowed
+    // slice, so a filter left on from a previous session is visible without
+    // opening the panel.
+    function syncFilterIndicator() {
+      const narrowed = Object.entries(FILTER_DEFAULTS).some(([key, value]) => state[key] !== value);
+      $('#settings-cog').dataset.filtered = String(narrowed);
+    }
     {
       const dock = $('#dock');
       const backdrop = $('#dock-backdrop');
@@ -1891,6 +1906,7 @@
     buildFilterPopup('gone-fpop', GONE_COLS, goneFilters, () => renderGoneBody(),
       ['price', 'address']);
     showView(state.view);
+    syncFilterIndicator();
     renderAll();
   </script>
 </body>
