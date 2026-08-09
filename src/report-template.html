@@ -1020,8 +1020,26 @@
     }
 
     // ---------------------------------------------------------------- state
-    const state = { area: 'all', type: 'all', days: 30 };
+    // Persisted so a refresh — or a relaunch of the home-screen app, which
+    // starts from the bookmarked URL and keeps no query string — comes back to
+    // the same slice of the market.
+    const STORE_KEY = 'housing-view-state';
+    const state = { area: 'all', type: 'all', days: 30, view: 'listings' };
     const areas = [...new Set(DATA.listings.map((l) => l.city))].sort();
+    const saveState = () => {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch { }
+    };
+    {
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch { }
+      if (saved) {
+        // an area that has since left the data would empty the page with no visible cause
+        if (saved.area === 'all' || areas.includes(saved.area)) state.area = saved.area;
+        if (['all', 'house', 'lot'].includes(saved.type)) state.type = saved.type;
+        if ([0, 7, 30, 90].includes(saved.days)) state.days = saved.days;
+        if (typeof saved.view === 'string') state.view = saved.view;
+      }
+    }
     const inScope = (l) => l &&
       (state.area === 'all' || l.city === state.area) &&
       (state.type === 'all' || l.type === state.type);
@@ -1076,14 +1094,21 @@
         o.value = a; o.textContent = a;
         sel.appendChild(o);
       }
-      sel.addEventListener('change', () => { state.area = sel.value; renderAll(); });
+      sel.value = state.area;
+      sel.addEventListener('change', () => { state.area = sel.value; saveState(); renderAll(); });
       const tsel = $('#type-filter');
-      tsel.addEventListener('change', () => { state.type = tsel.value; renderAll(); });
-      $('#rangeset').addEventListener('click', (e) => {
+      tsel.value = state.type;
+      tsel.addEventListener('change', () => { state.type = tsel.value; saveState(); renderAll(); });
+      const rangeset = $('#rangeset');
+      for (const b of rangeset.querySelectorAll('button')) {
+        b.setAttribute('aria-pressed', String(Number(b.dataset.days) === state.days));
+      }
+      rangeset.addEventListener('click', (e) => {
         const b = e.target.closest('button');
         if (!b) return;
         state.days = Number(b.dataset.days);
-        for (const x of $('#rangeset').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+        for (const x of rangeset.querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+        saveState();
         renderAll();
       });
     }
@@ -1091,6 +1116,9 @@
     // ---------------------------------------------------------------- views
     const VIEWS = { listings: '#view-listings', stats: '#view-stats' };
     function showView(name) {
+      if (!(name in VIEWS)) name = 'listings';
+      state.view = name;
+      saveState();
       for (const [key, sel] of Object.entries(VIEWS)) $(sel).hidden = key !== name;
       for (const b of $('#viewset').querySelectorAll('button')) {
         b.setAttribute('aria-pressed', String(b.dataset.view === name));
@@ -1878,7 +1906,7 @@
       ['price', 'bedrooms', 'address', 'lot_size']);
     buildFilterPopup('gone-fpop', GONE_COLS, goneFilters, () => renderGoneBody(),
       ['price', 'address']);
-    showView('listings');
+    showView(state.view);
     renderAll();
   </script>
 </body>
