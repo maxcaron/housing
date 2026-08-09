@@ -764,8 +764,14 @@
 
       #map,
       #fav-map {
-        height: 50vh;
+        height: 30vh;
         border-radius: 0;
+      }
+
+      /* a 30vh map leaves little room above the pin, so the popup's photo has
+         to give some back */
+      .popup-photo {
+        max-height: 80px;
       }
     }
 
@@ -2281,11 +2287,12 @@
       if (!mk) return;
       $('#' + entry.id).scrollIntoView({ behavior: 'smooth', block: 'center' });
       const zoom = Math.max(entry.map.getZoom(), 14);
-      // Popups open upward, so centring the marker leaves them only half the map
-      // to unfold into and tall ones get clipped. Put the marker a quarter up
-      // from the bottom instead, which means shifting the map centre above it.
+      // Popups open upward, so the pin sits a fixed 25px off the bottom edge and
+      // every pixel above it belongs to the popup. Horizontal centring is
+      // untouched; only the vertical centre moves.
+      const PIN_FROM_BOTTOM = 25;
       const markerPoint = entry.map.project(mk.getLatLng(), zoom);
-      const lift = L.point(0, entry.map.getSize().y * 0.25);
+      const lift = L.point(0, entry.map.getSize().y / 2 - PIN_FROM_BOTTOM);
       const center = entry.map.unproject(markerPoint.subtract(lift), zoom);
       entry.map.once('moveend', () => mk.openPopup());
       entry.map.flyTo(center, zoom, { duration: 0.8 });
