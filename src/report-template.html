@@ -1124,6 +1124,11 @@
       min-width: 180px;
     }
 
+    td.star-cell {
+      width: 1%;
+      padding: 4px 0 4px 8px;
+    }
+
     td.eye-cell {
       text-align: center;
     }
@@ -2042,16 +2047,19 @@
         latestRelistAt.set(e.mls, e.at);
       }
     }
+    // tables are narrow on a phone; the century is never the interesting part
+    const shortDate = (iso) => (iso ? iso.slice(2, 10) : null);
     const listingRow = (l) => ({
       ...l,
       type: typeLabel(l.type),
       source: sourceLabel(l.source),
       tracked: daysTracked(l),
-      first_seen: l.first_seen.slice(0, 10),
-      relisted: latestRelistAt.get(l.mls)?.slice(0, 10) ?? null,
+      first_seen: shortDate(l.first_seen),
+      relisted: shortDate(latestRelistAt.get(l.mls)) ?? null,
       vs_assess: l.assess_total ? Math.round((l.price / l.assess_total) * 100) : null,
     });
     const LISTING_COLS = [
+      { key: 'star', label: '', noSort: true },
       { key: 'first_seen', label: 'Date added', desc: true, nowrap: true },
       { key: 'address', label: 'Address' },
       { key: 'city', label: 'Area' },
@@ -2094,6 +2102,13 @@
         });
       }
       for (const c of cols) {
+        if (c.key === 'star') {
+          const tds = document.createElement('td');
+          tds.className = 'star-cell';
+          tds.appendChild(starButton(r.mls));
+          tr.appendChild(tds);
+          continue;
+        }
         if (c.key === 'address') {
           tr.appendChild(addressCell(r));
           continue;
@@ -2108,7 +2123,7 @@
       }
       const tdl = document.createElement('td');
       tdl.className = 'eye-cell';
-      tdl.append(starButton(r.mls), centrisEyeLink(r.url));
+      tdl.appendChild(centrisEyeLink(r.url));
       tr.appendChild(tdl);
       return tr;
     }
@@ -2120,13 +2135,15 @@
       const trh = document.createElement('tr');
       for (const c of cols) {
         const th = document.createElement('th');
-        th.className = 'sortable' + (c.num ? ' num' : '') + (c.nowrap ? ' nowrap' : '');
+        th.className = (c.noSort ? '' : 'sortable') + (c.num ? ' num' : '') + (c.nowrap ? ' nowrap' : '');
         th.textContent = c.label + (sort.key === c.key ? (sort.dir < 0 ? ' ↓' : ' ↑') : '');
-        th.addEventListener('click', () => {
-          sort.dir = sort.key === c.key ? -sort.dir : (c.num || c.desc ? -1 : 1);
-          sort.key = c.key;
-          rerender();
-        });
+        if (!c.noSort) {
+          th.addEventListener('click', () => {
+            sort.dir = sort.key === c.key ? -sort.dir : (c.num || c.desc ? -1 : 1);
+            sort.key = c.key;
+            rerender();
+          });
+        }
         trh.appendChild(th);
       }
       trh.appendChild(document.createElement('th'));
@@ -2160,7 +2177,7 @@
         .filter((e) => e.kind === 'price_change' && byMls.has(e.mls))
         .map((e) => ({
           ...listingRow(byMls.get(e.mls)),
-          changed: e.at.slice(0, 10),
+          changed: shortDate(e.at),
           old_price: e.old_price,
           new_price: e.price,
           delta: ((e.price - e.old_price) / e.old_price) * 100,
@@ -2348,7 +2365,7 @@
           const gone = delistedAt.get(l.mls) ?? l.last_seen;
           return {
             ...listingRow(l),
-            gone: gone.slice(0, 10),
+            gone: shortDate(gone),
             onMarket: Math.max(0, Math.round((new Date(gone) - new Date(l.first_seen)) / DAY)),
           };
         });
