@@ -209,14 +209,21 @@
     }
 
     .viewset button {
+      display: grid;
+      place-items: center;
       font: inherit;
       font-size: 13px;
       font-weight: 550;
+      line-height: 0;
       padding: 10px 20px;
       border: 0;
       cursor: pointer;
       background: var(--surface-1);
       color: var(--text-secondary);
+    }
+
+    .viewset button svg {
+      display: block;
     }
 
     .viewset button+button {
@@ -711,11 +718,20 @@
       isolation: isolate;
     }
 
+    /* the favourites map is a locator for a short list, not the main view */
+    #fav-map {
+      height: 210px;
+    }
+
     @media (max-width: 640px) {
 
       #map,
       #fav-map {
         height: 70vh;
+      }
+
+      #fav-map {
+        height: 35vh;
       }
     }
 
