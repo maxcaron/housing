@@ -723,6 +723,55 @@
       height: 210px;
     }
 
+    .tablecard {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-1);
+      overflow: hidden;
+    }
+
+    .tablebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--grid);
+    }
+
+    .tablebar-title {
+      font-size: 15px;
+      font-weight: 650;
+    }
+
+    .tableset {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .tableset button {
+      font: inherit;
+      font-size: 13px;
+      font-weight: 550;
+      padding: 8px 14px;
+      border: 0;
+      cursor: pointer;
+      background: var(--surface-1);
+      color: var(--text-secondary);
+    }
+
+    .tableset button+button {
+      border-left: 1px solid var(--border);
+    }
+
+    .tableset button[aria-pressed="true"] {
+      background: var(--series-1);
+      color: #fff;
+    }
+
     .mapwrap {
       margin-top: 12px;
       padding: 14px 16px;
@@ -738,14 +787,53 @@
          give the padding back to the views that still want it */
       .wrap {
         padding-top: 0;
+        padding-bottom: 0;
       }
 
       #view-stats {
         padding-top: 20px;
+        padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
       }
 
       .stale {
         margin-top: 20px;
+      }
+
+      /* the toggle rides just under the pinned map and stays put with it */
+      .tablecard {
+        margin-top: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        overflow: visible;
+      }
+
+      .tablebar {
+        position: sticky;
+        top: 30vh;
+        z-index: 4;
+        margin: 0 -28px;
+        padding: 9px 12px;
+        background: var(--page);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .tableset {
+        flex: 1;
+      }
+
+      .tableset button {
+        flex: 1;
+        padding: 9px 6px;
+      }
+
+      /* the table takes the whole width and whatever height the map, the bar
+         and the dock leave behind */
+      .table-scroll {
+        margin: 0 -28px;
+        max-height: none;
+        height: calc(100vh - 30vh - 53px - 72px - env(safe-area-inset-bottom, 0px));
+        height: calc(100dvh - 30vh - 53px - 72px - env(safe-area-inset-bottom, 0px));
       }
 
       /* full-bleed and pinned: the map stays in view while the tables scroll
@@ -1098,39 +1186,20 @@
         <div id="map"></div>
         <div id="map-fallback">Map tiles need an internet connection.</div>
       </div>
-      <div class="grid">
-      <div class="card full">
-        <div class="card-top">
-          <div>
-            <h2>Price changes</h2>
-            <p class="desc">Corrections in the selected range</p>
-          </div>
-          <div class="fpop-wrap" id="changes-fpop"></div>
-        </div>
-        <div class="table-scroll" id="price-changes"></div>
-      </div>
-      <div class="card full">
-        <div class="card-top">
-          <div>
-            <h2>Listings</h2>
-            <p class="desc">Click a column to sort, a row to locate it on the map. “Days” counts days since first seen
-              by this tool.</p>
+      <div class="tablecard">
+        <div class="tablebar">
+          <div class="tableset" id="tableset" role="group" aria-label="Table">
+            <button type="button" data-table="listings" aria-pressed="true">Listings</button>
+            <button type="button" data-table="changes" aria-pressed="false">Repriced</button>
+            <button type="button" data-table="gone" aria-pressed="false">Sold</button>
           </div>
           <div class="fpop-wrap" id="listings-fpop"></div>
+          <div class="fpop-wrap" id="changes-fpop" hidden></div>
+          <div class="fpop-wrap" id="gone-fpop" hidden></div>
         </div>
         <div class="table-scroll" id="listings-table"></div>
-      </div>
-      <div class="card full">
-        <div class="card-top">
-          <div>
-            <h2>Sold / delisted</h2>
-            <p class="desc">Listings that disappeared from Centris — sold or withdrawn (Centris doesn’t say which). “On
-              market” counts from first seen to delisting.</p>
-          </div>
-          <div class="fpop-wrap" id="gone-fpop"></div>
-        </div>
-        <div class="table-scroll" id="gone-table"></div>
-      </div>
+        <div class="table-scroll" id="price-changes" hidden></div>
+        <div class="table-scroll" id="gone-table" hidden></div>
       </div>
     </section>
 
@@ -1139,17 +1208,12 @@
         <div id="fav-map"></div>
         <div id="fav-map-fallback">Map tiles need an internet connection.</div>
       </div>
-      <div class="grid">
-        <div class="card full">
-          <div class="card-top">
-            <div>
-              <h2>Favourites</h2>
-              <p class="desc">Listings you have starred. Tap a star again to drop one.</p>
-            </div>
-            <div class="fpop-wrap" id="fav-fpop"></div>
-          </div>
-          <div class="table-scroll" id="fav-table"></div>
+      <div class="tablecard">
+        <div class="tablebar">
+          <span class="tablebar-title">Favourites</span>
+          <div class="fpop-wrap" id="fav-fpop"></div>
         </div>
+        <div class="table-scroll" id="fav-table"></div>
       </div>
     </section>
 
@@ -1371,7 +1435,7 @@
     // starts from the bookmarked URL and keeps no query string — comes back to
     // the same slice of the market.
     const STORE_KEY = 'housing-view-state';
-    const state = { areas: [], types: [], sources: [], days: 0, view: 'listings' };
+    const state = { areas: [], types: [], sources: [], days: 0, view: 'listings', table: 'listings' };
     const FILTER_DEFAULTS = { days: state.days };
     // an empty list means "no filter", so every chip group clears rather than
     // carrying an "all" value of its own
@@ -1460,6 +1524,7 @@
         if (Array.isArray(saved.sources)) state.sources = saved.sources.filter((s) => sources.includes(s));
         if ([0, 7, 30, 90].includes(saved.days)) state.days = saved.days;
         if (typeof saved.view === 'string') state.view = saved.view;
+        if (typeof saved.table === 'string') state.table = saved.table;
       }
     }
     const inScope = (l) => l &&
@@ -1561,6 +1626,31 @@
         renderAll();
       });
     }
+
+    // ---------------------------------------------------------------- tables
+    // One pane at a time so a table can own the full width and the height the
+    // map and the dock leave it. Each keeps its own filter popup, shown with it.
+    const TABLES = {
+      listings: { pane: '#listings-table', filters: '#listings-fpop' },
+      changes: { pane: '#price-changes', filters: '#changes-fpop' },
+      gone: { pane: '#gone-table', filters: '#gone-fpop' },
+    };
+    function showTable(name) {
+      if (!(name in TABLES)) name = 'listings';
+      state.table = name;
+      saveState();
+      for (const [key, pane] of Object.entries(TABLES)) {
+        $(pane.pane).hidden = key !== name;
+        $(pane.filters).hidden = key !== name;
+      }
+      for (const b of $('#tableset').querySelectorAll('button')) {
+        b.setAttribute('aria-pressed', String(b.dataset.table === name));
+      }
+    }
+    $('#tableset').addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (b) showTable(b.dataset.table);
+    });
 
     // ---------------------------------------------------------------- views
     const VIEWS = { listings: '#view-listings', stats: '#view-stats', favorites: '#view-favorites' };
@@ -2584,6 +2674,7 @@
       ['price', 'address']);
     buildFilterPopup('fav-fpop', LISTING_COLS, favFilters, () => renderFavBody(),
       ['price', 'bedrooms', 'address', 'lot_size']);
+    showTable(state.table);
     showView(state.view);
     syncFilterIndicator();
     renderAll();
