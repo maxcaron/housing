@@ -149,7 +149,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      z-index: 80;
+      z-index: 1000;
       background: var(--surface-1);
       border-top: 1px solid var(--border);
       box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.14);
@@ -191,7 +191,7 @@
     .dock-backdrop {
       position: fixed;
       inset: 0;
-      z-index: 70;
+      z-index: 900;
       background: rgba(0, 0, 0, 0.28);
       opacity: 0;
       visibility: hidden;
@@ -491,7 +491,7 @@
     #tooltip {
       position: fixed;
       pointer-events: none;
-      z-index: 1000;
+      z-index: 1200;
       display: none;
       background: var(--surface-1);
       border: 1px solid var(--border);
@@ -529,6 +529,9 @@
       height: 420px;
       border-radius: 8px;
       background: var(--page);
+      /* Leaflet stacks its panes up to z-index 1000; contain them here so they
+         compete inside the map instead of against the dock */
+      isolation: isolate;
     }
 
     @media (max-width: 640px) {
