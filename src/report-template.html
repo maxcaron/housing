@@ -1403,10 +1403,11 @@
     }
 
     // ---------------------------------------------------------------- listings table
-    const sort = { key: 'price', dir: -1 };
+    const sort = { key: 'first_seen', dir: -1 };
     const listingFilters = {};
     const LISTING_COLS = [
       { key: 'address', label: 'Address' },
+      { key: 'first_seen', label: 'Date added', desc: true },
       { key: 'city', label: 'Area' },
       { key: 'type', label: 'Type' },
       { key: 'price', label: 'Price', num: true },
@@ -1421,7 +1422,6 @@
       { key: 'lot_size', label: 'Land (pc)', num: true },
       { key: 'parking_count', label: 'Park', num: true },
       { key: 'tracked', label: 'Days', num: true },
-      { key: 'first_seen', label: 'First seen', desc: true },
       { key: 'relisted', label: 'Relisted', desc: true },
     ];
     const latestRelistAt = new Map();
@@ -1438,7 +1438,7 @@
         ...l,
         type: typeLabel(l.type),
         tracked: daysTracked(l),
-        first_seen: l.first_seen.slice(0, 16).replace('T', ' '),
+        first_seen: l.first_seen.slice(0, 10),
         relisted: latestRelistAt.get(l.mls)?.slice(0, 10) ?? null,
         vs_assess: l.assess_total ? Math.round((l.price / l.assess_total) * 100) : null,
       }));
@@ -1479,6 +1479,7 @@
           }
           tr.appendChild(addressCell(l));
           const vals = [
+            l.first_seen,
             l.city, l.type, fmtMoney(l.price),
             l.assess_lot ? fmtMoney(l.assess_lot) : '—',
             l.assess_building ? fmtMoney(l.assess_building) : '—',
@@ -1489,7 +1490,6 @@
             l.lot_size ? l.lot_size.toLocaleString('en-CA') : '—',
             l.parking_count ?? '—',
             String(l.tracked),
-            l.first_seen,
             l.relisted ?? '—',
           ];
           vals.forEach((v, i) => {
@@ -1518,6 +1518,7 @@
     const GONE_COLS = [
       { key: 'gone', label: 'Delisted' },
       { key: 'address', label: 'Address' },
+      { key: 'first_seen', label: 'Date added' },
       { key: 'city', label: 'Area' },
       { key: 'type', label: 'Type' },
       { key: 'price', label: 'Last price', num: true },
@@ -1540,7 +1541,7 @@
         .map((l) => {
           const gone = delistedAt.get(l.mls) ?? l.last_seen;
           const onMarket = Math.max(0, Math.round((new Date(gone) - new Date(l.first_seen)) / DAY));
-          return { ...l, type: typeLabel(l.type), gone: gone.slice(0, 10), onMarket };
+          return { ...l, type: typeLabel(l.type), first_seen: l.first_seen.slice(0, 10), gone: gone.slice(0, 10), onMarket };
         })
         .sort((a, b) => b.gone.localeCompare(a.gone));
       if (!baseRows.length) {
@@ -1570,6 +1571,7 @@
           tr.appendChild(tdDate);
           tr.appendChild(addressCell(l));
           const vals = [
+            l.first_seen,
             l.city, l.type, fmtMoney(l.price),
             l.assess_lot ? fmtMoney(l.assess_lot) : '—',
             l.assess_building ? fmtMoney(l.assess_building) : '—',
