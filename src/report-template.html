@@ -723,15 +723,34 @@
       height: 210px;
     }
 
+    .mapwrap {
+      margin-top: 12px;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-1);
+    }
+
     @media (max-width: 640px) {
+
+      /* full-bleed and pinned: the map stays in view while the tables scroll
+         under it. It sits outside .grid because a sticky grid item is confined
+         to its own grid area and would never travel past its row. */
+      .mapwrap {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        margin: 0 -28px;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: var(--page);
+      }
 
       #map,
       #fav-map {
-        height: 70vh;
-      }
-
-      #fav-map {
-        height: 35vh;
+        height: 50vh;
+        border-radius: 0;
       }
     }
 
@@ -1038,13 +1057,11 @@
     <div class="stale" id="stale" hidden></div>
 
     <section id="view-listings">
-      <div class="grid">
-        <div class="card full">
-          <h2>Map</h2>
-          <p class="desc">Houses in blue (darker = higher asking price, quintiles) · lots in brown</p>
-          <div id="map"></div>
-          <div id="map-fallback">Map tiles need an internet connection.</div>
+      <div class="mapwrap">
+        <div id="map"></div>
+        <div id="map-fallback">Map tiles need an internet connection.</div>
       </div>
+      <div class="grid">
       <div class="card full">
         <div class="card-top">
           <div>
@@ -1081,13 +1098,11 @@
     </section>
 
     <section id="view-favorites" hidden>
+      <div class="mapwrap">
+        <div id="fav-map"></div>
+        <div id="fav-map-fallback">Map tiles need an internet connection.</div>
+      </div>
       <div class="grid">
-        <div class="card full">
-          <h2>Map</h2>
-          <p class="desc">Your starred listings</p>
-          <div id="fav-map"></div>
-          <div id="fav-map-fallback">Map tiles need an internet connection.</div>
-        </div>
         <div class="card full">
           <div class="card-top">
             <div>
@@ -1153,16 +1168,16 @@
               <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
             </svg>
           </button>
-          <button type="button" data-view="stats" aria-pressed="false" aria-label="Statistics" title="Statistics">
-            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M5 20V10M12 20V4M19 20v-6" />
-            </svg>
-          </button>
           <button type="button" data-view="favorites" aria-pressed="false" aria-label="Favourites" title="Favourites">
             <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9"
               stroke-linejoin="round" aria-hidden="true">
               <path d="M12 3.6l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.62l-5.1 2.68.98-5.68L3.75 9.6l5.7-.83z" />
+            </svg>
+          </button>
+          <button type="button" data-view="stats" aria-pressed="false" aria-label="Statistics" title="Statistics">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 20V10M12 20V4M19 20v-6" />
             </svg>
           </button>
         </div>
