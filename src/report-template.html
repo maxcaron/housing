@@ -996,6 +996,10 @@
       color: var(--text-primary);
     }
 
+    tbody tr.selected {
+      background: color-mix(in srgb, var(--series-1) 15%, transparent);
+    }
+
     tbody tr:hover {
       background: color-mix(in srgb, var(--text-primary) 4%, transparent);
     }
@@ -2106,12 +2110,14 @@
 
     function tableRow(r, cols, focusable) {
       const tr = document.createElement('tr');
+      tr.dataset.mls = r.mls;
       if (focusable && r.status === 'active') {
         tr.style.cursor = 'pointer';
         if (!seen.has(r.mls)) tr.classList.add('unseen');
         tr.addEventListener('click', (e) => {
           if (e.target.closest('a')) return; // the listing link keeps its own behavior
           if (markSeen(r.mls)) tr.classList.remove('unseen');
+          selectRow(tr);
           focusListing(r.mls); // no-ops when the listing has no marker
         });
       }
@@ -2143,7 +2149,30 @@
     }
     // Returns the body renderer so a filter change can redraw rows without
     // rebuilding the header.
-    function buildTable({ root, cols, rows, sort, filters, focusable, rerender }) {
+    const rowIndex = new Map();
+    let selectedRow = null;
+    function selectRow(tr) {
+      if (selectedRow === tr) return;
+      if (selectedRow) selectedRow.classList.remove('selected');
+      selectedRow = tr;
+      if (tr) tr.classList.add('selected');
+    }
+    // Find a listing's row wherever it lives, switching tables if it is not in
+    // the one on screen — a marker can belong to a table you are not reading.
+    function revealRow(mls) {
+      const candidates = state.view === 'favorites'
+        ? ['favorites']
+        : [state.table, 'listings', 'changes', 'gone'];
+      for (const key of candidates) {
+        const tr = rowIndex.get(key)?.get(mls);
+        if (!tr) continue;
+        if (key !== state.table && state.view !== 'favorites') showTable(key);
+        selectRow(tr);
+        tr.scrollIntoView({ block: 'center' });
+        return;
+      }
+    }
+    function buildTable({ root, cols, rows, sort, filters, focusable, rerender, key }) {
       const table = document.createElement('table');
       const thead = document.createElement('thead');
       const trh = document.createElement('tr');
@@ -2171,7 +2200,14 @@
           if (vb == null) return -1;
           return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * sort.dir;
         });
-        for (const r of shown) tb.appendChild(tableRow(r, cols, focusable));
+        const index = new Map();
+        for (const r of shown) {
+          const tr = tableRow(r, cols, focusable);
+          index.set(r.mls, tr);
+          tb.appendChild(tr);
+        }
+        rowIndex.set(key, index);
+        selectedRow = null;
       };
       table.append(thead, tb);
       renderBody();
@@ -2203,7 +2239,7 @@
       }
       renderChangeBody = buildTable({
         root, cols: CHANGE_COLS, rows, sort: changeSort, filters: changeFilters,
-        focusable: true, rerender: renderPriceChanges,
+        focusable: true, rerender: renderPriceChanges, key: 'changes',
       });
     }
 
@@ -2357,7 +2393,7 @@
       root.textContent = '';
       renderListingBody = buildTable({
         root, cols: LISTING_COLS, rows: active().map(listingRow),
-        sort, filters: listingFilters, focusable: true, rerender: renderTable,
+        sort, filters: listingFilters, focusable: true, rerender: renderTable, key: 'listings',
       });
     }
 
@@ -2389,7 +2425,7 @@
         return;
       }
       renderGoneBody = buildTable({
-        root, cols: GONE_COLS, rows, sort: goneSort, filters: goneFilters, rerender: renderGone,
+        root, cols: GONE_COLS, rows, sort: goneSort, filters: goneFilters, rerender: renderGone, key: 'gone',
       });
     }
 
@@ -2407,7 +2443,7 @@
       } else {
         renderFavBody = buildTable({
           root, cols: LISTING_COLS, rows, sort: favSort, filters: favFilters,
-          focusable: true, rerender: renderFavorites,
+          focusable: true, rerender: renderFavorites, key: 'favorites',
         });
       }
       renderListingMap('fav-map', favoriteListings());
@@ -2520,6 +2556,7 @@
         mk.on('click', () => {
           markSeen(l.mls);
           placeAndOpen(entry, mk);
+          revealRow(l.mls);
         });
         mk.addTo(entry.layer);
         entry.markers.set(l.mls, mk);
