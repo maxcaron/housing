@@ -462,6 +462,12 @@
       font-variant-numeric: tabular-nums;
     }
 
+    td.nowrap,
+    th.nowrap {
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
     th {
       color: var(--text-secondary);
       font-weight: 600;
@@ -1445,8 +1451,8 @@
     const sort = { key: 'first_seen', dir: -1 };
     const listingFilters = {};
     const LISTING_COLS = [
+      { key: 'first_seen', label: 'Date added', desc: true, nowrap: true },
       { key: 'address', label: 'Address' },
-      { key: 'first_seen', label: 'Date added', desc: true },
       { key: 'city', label: 'Area' },
       { key: 'type', label: 'Type' },
       { key: 'price', label: 'Price', num: true },
@@ -1487,7 +1493,7 @@
       const trh = document.createElement('tr');
       for (const c of cols) {
         const th = document.createElement('th');
-        th.className = 'sortable' + (c.num ? ' num' : '');
+        th.className = 'sortable' + (c.num ? ' num' : '') + (c.nowrap ? ' nowrap' : '');
         th.textContent = c.label + (sort.key === c.key ? (sort.dir < 0 ? ' ↓' : ' ↑') : '');
         th.addEventListener('click', () => {
           sort.dir = sort.key === c.key ? -sort.dir : (c.num || c.desc ? -1 : 1);
@@ -1516,9 +1522,12 @@
               focusListing(l.mls);
             });
           }
+          const tdAdded = document.createElement('td');
+          tdAdded.className = 'nowrap';
+          tdAdded.textContent = l.first_seen;
+          tr.appendChild(tdAdded);
           tr.appendChild(addressCell(l));
           const vals = [
-            l.first_seen,
             l.city, l.type, fmtMoney(l.price),
             l.assess_lot ? fmtMoney(l.assess_lot) : '—',
             l.assess_building ? fmtMoney(l.assess_building) : '—',
@@ -1533,8 +1542,8 @@
           ];
           vals.forEach((v, i) => {
             const td = document.createElement('td');
-            if (cols[i + 1] && cols[i + 1].num) td.className = 'num';
-            if (cols[i + 1] && cols[i + 1].key === 'vs_assess' && l.vs_assess != null && l.vs_assess < 100) td.classList.add('down');
+            if (cols[i + 2] && cols[i + 2].num) td.className = 'num';
+            if (cols[i + 2] && cols[i + 2].key === 'vs_assess' && l.vs_assess != null && l.vs_assess < 100) td.classList.add('down');
             td.textContent = v;
             tr.appendChild(td);
           });
@@ -1555,9 +1564,9 @@
     // ---------------------------------------------------------------- sold / delisted table
     const goneFilters = {};
     const GONE_COLS = [
-      { key: 'gone', label: 'Delisted' },
+      { key: 'gone', label: 'Delisted', nowrap: true },
+      { key: 'first_seen', label: 'Date added', nowrap: true },
       { key: 'address', label: 'Address' },
-      { key: 'first_seen', label: 'Date added' },
       { key: 'city', label: 'Area' },
       { key: 'type', label: 'Type' },
       { key: 'price', label: 'Last price', num: true },
@@ -1594,7 +1603,7 @@
       const trh = document.createElement('tr');
       for (const c of cols) {
         const th = document.createElement('th');
-        if (c.num) th.className = 'num';
+        th.className = (c.num ? 'num' : '') + (c.nowrap ? ' nowrap' : '');
         th.textContent = c.label;
         trh.appendChild(th);
       }
@@ -1606,11 +1615,15 @@
         for (const l of applyColFilters(baseRows, cols, goneFilters)) {
           const tr = document.createElement('tr');
           const tdDate = document.createElement('td');
+          tdDate.className = 'nowrap';
           tdDate.textContent = l.gone;
           tr.appendChild(tdDate);
+          const tdAdded = document.createElement('td');
+          tdAdded.className = 'nowrap';
+          tdAdded.textContent = l.first_seen;
+          tr.appendChild(tdAdded);
           tr.appendChild(addressCell(l));
           const vals = [
-            l.first_seen,
             l.city, l.type, fmtMoney(l.price),
             l.assess_lot ? fmtMoney(l.assess_lot) : '—',
             l.assess_building ? fmtMoney(l.assess_building) : '—',
@@ -1618,7 +1631,7 @@
           ];
           vals.forEach((v, i) => {
             const td = document.createElement('td');
-            if (cols[i + 2] && cols[i + 2].num) td.className = 'num';
+            if (cols[i + 3] && cols[i + 3].num) td.className = 'num';
             td.textContent = v;
             tr.appendChild(td);
           });
