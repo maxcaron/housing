@@ -240,6 +240,29 @@
       gap: 6px;
     }
 
+    .chipset {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      font: inherit;
+      font-size: 13px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--page);
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    .chip[aria-pressed="true"] {
+      background: var(--series-1);
+      border-color: transparent;
+      color: #fff;
+    }
+
     .dock-label {
       font-size: 12px;
       font-weight: 600;
@@ -891,8 +914,8 @@
           </div>
         </div>
         <div class="dock-row">
-          <label class="dock-label" for="area-filter">Area</label>
-          <select id="area-filter"></select>
+          <span class="dock-label">Areas</span>
+          <div class="chipset" id="area-chips" role="group" aria-label="Areas"></div>
         </div>
         <div class="dock-row">
           <label class="dock-label" for="type-filter">Type</label>
@@ -1010,9 +1033,12 @@
     // starts from the bookmarked URL and keeps no query string — comes back to
     // the same slice of the market.
     const STORE_KEY = 'housing-view-state';
-    const state = { area: 'all', type: 'all', days: 0, view: 'listings' };
-    const FILTER_DEFAULTS = { area: state.area, type: state.type, days: state.days };
+    const state = { areas: [], type: 'all', days: 0, view: 'listings' };
+    const FILTER_DEFAULTS = { type: state.type, days: state.days };
     const areas = [...new Set(DATA.listings.map((l) => l.city))].sort();
+    const areaNote = () => state.areas.length === 0 ? 'all areas'
+      : state.areas.length === 1 ? state.areas[0]
+      : `${state.areas.length} areas`;
     const saveState = () => {
       try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch { }
     };
@@ -1021,14 +1047,14 @@
       try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch { }
       if (saved) {
         // an area that has since left the data would empty the page with no visible cause
-        if (saved.area === 'all' || areas.includes(saved.area)) state.area = saved.area;
+        if (Array.isArray(saved.areas)) state.areas = saved.areas.filter((a) => areas.includes(a));
         if (['all', 'house', 'lot'].includes(saved.type)) state.type = saved.type;
         if ([0, 7, 30, 90].includes(saved.days)) state.days = saved.days;
         if (typeof saved.view === 'string') state.view = saved.view;
       }
     }
     const inScope = (l) => l &&
-      (state.area === 'all' || l.city === state.area) &&
+      (state.areas.length === 0 || state.areas.includes(l.city)) &&
       (state.type === 'all' || l.type === state.type);
     const active = () => DATA.listings.filter((l) => l.status === 'active' && inScope(l));
     const eventsInRange = () => {
@@ -1069,20 +1095,38 @@
 
     // ---------------------------------------------------------------- filters
     {
-      const sel = $('#area-filter');
-      const optAll = document.createElement('option');
-      optAll.value = 'all'; optAll.textContent = 'All areas';
-      sel.appendChild(optAll);
-      for (const a of areas) {
-        const o = document.createElement('option');
-        o.value = a; o.textContent = a;
-        sel.appendChild(o);
+      // an empty selection means every area, so the All chip is a clear rather
+      // than a value of its own
+      const chipBox = $('#area-chips');
+      const chips = [];
+      for (const [label, area] of [['All', ''], ...areas.map((a) => [a, a])]) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip';
+        chip.textContent = label;
+        chip.dataset.area = area;
+        chipBox.appendChild(chip);
+        chips.push(chip);
       }
-      sel.value = state.area;
-      sel.addEventListener('change', () => {
-        state.area = sel.value;
+      const syncChips = () => {
+        for (const chip of chips) {
+          const on = chip.dataset.area === ''
+            ? state.areas.length === 0
+            : state.areas.includes(chip.dataset.area);
+          chip.setAttribute('aria-pressed', String(on));
+        }
+      };
+      chipBox.addEventListener('click', (e) => {
+        const chip = e.target.closest('button');
+        if (!chip) return;
+        const area = chip.dataset.area;
+        if (area === '') state.areas = [];
+        else if (state.areas.includes(area)) state.areas = state.areas.filter((a) => a !== area);
+        else state.areas = [...state.areas, area];
+        syncChips();
         saveState(); syncFilterIndicator(); renderAll();
       });
+      syncChips();
       const tsel = $('#type-filter');
       tsel.value = state.type;
       tsel.addEventListener('change', () => {
@@ -1126,7 +1170,8 @@
     // slice, so a filter left on from a previous session is visible without
     // opening the panel.
     function syncFilterIndicator() {
-      const narrowed = Object.entries(FILTER_DEFAULTS).some(([key, value]) => state[key] !== value);
+      const narrowed = state.areas.length > 0 ||
+        Object.entries(FILTER_DEFAULTS).some(([key, value]) => state[key] !== value);
       $('#settings-cog').dataset.filtered = String(narrowed);
     }
     {
@@ -1150,7 +1195,7 @@
       const cuts = ev.filter((e) => e.kind === 'price_change' && e.price < e.old_price);
       const rangeLbl = state.days ? `last ${state.days} days` : 'all time';
       const tiles = [
-        { label: 'Active listings', value: String(act.length), note: state.area === 'all' ? 'all areas' : state.area },
+        { label: 'Active listings', value: String(act.length), note: areaNote() },
         { label: 'Median asking price', value: act.length ? fmtCompact(median(act.map((l) => l.price))) : '—', note: 'active listings' },
         { label: 'New listings', value: String(ev.filter((e) => e.kind === 'listed').length), note: rangeLbl },
         { label: 'Price cuts', value: String(cuts.length), note: rangeLbl },
@@ -1380,7 +1425,7 @@
       counts.forEach((c, i) => {
         const yTop = m.t + i * rowH;
         const bw = Math.max(2, (c.n / maxV) * iw * 0.72);
-        const dim = state.area !== 'all' && state.area !== c.area;
+        const dim = state.areas.length > 0 && !state.areas.includes(c.area);
         const name = svgEl('text', { x: m.l, y: yTop + 12, class: '', fill: 'var(--text-secondary)' });
         name.textContent = c.area;
         name.style.fill = 'var(--text-secondary)';
