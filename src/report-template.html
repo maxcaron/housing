@@ -96,6 +96,29 @@
       padding: 24px 28px 64px;
     }
 
+    .titlebar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .refresh {
+      flex: none;
+      font: inherit;
+      font-size: 13px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-1);
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    .refresh:active {
+      background: var(--page);
+    }
+
     header h1 {
       font-size: 20px;
       font-weight: 650;
@@ -641,8 +664,13 @@
 <body>
   <div class="wrap">
     <header>
-      <h1>Housing tracker</h1>
-      <div class="sub" id="subtitle"></div>
+      <div class="titlebar">
+        <div>
+          <h1>Housing tracker</h1>
+          <div class="sub" id="subtitle"></div>
+        </div>
+        <button type="button" id="refresh" class="refresh" title="Fetch the latest published data">Refresh</button>
+      </div>
       <div class="stale" id="stale" hidden></div>
     </header>
 
@@ -858,6 +886,13 @@
         s.innerHTML = '<strong>Data may be stale.</strong> ';
         s.appendChild(document.createTextNode(DATA.staleWarning));
       }
+      const refreshButton = $('#refresh');
+      refreshButton.addEventListener('click', () => {
+        refreshButton.disabled = true;
+        refreshButton.textContent = 'Refreshing…';
+        const cacheBustedUrl = location.pathname + '?fetched=' + Date.now();
+        location.replace(cacheBustedUrl);
+      });
     }
 
     // ---------------------------------------------------------------- filters
