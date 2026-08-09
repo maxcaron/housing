@@ -2420,6 +2420,27 @@
     const mapIsPinned = () => matchMedia('(max-width: 640px)').matches;
     const PIN_FROM_BOTTOM = 24;
     const markerByMls = new Map();
+    // Every way of selecting a listing lands it in the same place: horizontally
+    // centred, PIN_FROM_BOTTOM off the bottom edge, with the popup above it.
+    function placeAndOpen(entry, mk) {
+      // a refit queued by the last render would otherwise land after this one
+      clearTimeout(entry.revealTimer);
+      entry.map.invalidateSize({ pan: false });
+      const zoom = Math.max(entry.map.getZoom(), 14);
+      // The height has to be measured off the element. Leaflet caches its
+      // container size and only refreshes it on a window resize, but the sticky
+      // map is sized in vh and iOS changes the viewport as the browser chrome
+      // slides away without reliably firing one. A stale, smaller height yields
+      // a smaller lift, which is why the pin sometimes landed near the middle.
+      const mapHeight = $('#' + entry.id).clientHeight || entry.map.getSize().y;
+      const markerPoint = entry.map.project(mk.getLatLng(), zoom);
+      const lift = L.point(0, Math.max(0, mapHeight / 2 - PIN_FROM_BOTTOM));
+      const center = entry.map.unproject(markerPoint.subtract(lift), zoom);
+      // Open first: with autoPan off this moves nothing, so the view set below
+      // is the view that stays.
+      if (!mk.isPopupOpen()) mk.openPopup();
+      entry.map.setView(center, zoom, { animate: true, duration: 0.6 });
+    }
     function focusListing(mls) {
       const entry = mapStates[state.view === 'favorites' ? 'fav-map' : 'map'];
       const mk = entry && entry.markers.get(mls);
@@ -2427,28 +2448,7 @@
       // the mobile map is sticky and therefore always visible; scrolling to it
       // would only drag the table out from under the finger
       if (!mapIsPinned()) $('#' + entry.id).scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // a refit queued by the last render would otherwise land after this one
-      clearTimeout(entry.revealTimer);
-      const zoom = Math.max(entry.map.getZoom(), 14);
-      // Popups open upward, so the pin sits a fixed 25px off the bottom edge and
-      // every pixel above it belongs to the popup. Horizontal centring is
-      // untouched; only the vertical centre moves.
-      //
-      // The height has to be measured off the element. Leaflet caches its
-      // container size and only refreshes it on a window resize, but the sticky
-      // map is sized in vh and iOS changes the viewport as the browser chrome
-      // slides away without reliably firing one. A stale, smaller height yields
-      // a smaller lift, which is why the pin sometimes landed near the middle.
-      entry.map.invalidateSize({ pan: false });
-      const mapHeight = $('#' + entry.id).clientHeight || entry.map.getSize().y;
-      const markerPoint = entry.map.project(mk.getLatLng(), zoom);
-      const lift = L.point(0, Math.max(0, mapHeight / 2 - PIN_FROM_BOTTOM));
-      const center = entry.map.unproject(markerPoint.subtract(lift), zoom);
-      // Open first: with autoPan off this moves nothing, so the view set below
-      // is the view that stays. Waiting on moveend instead raced with any other
-      // movement and left the popup opening against a half-finished flight.
-      mk.openPopup();
-      entry.map.setView(center, zoom, { animate: true, duration: 0.6 });
+      placeAndOpen(entry, mk);
     }
     const listingFacts = (l) => l.type === 'lot'
       ? `Lot${l.lot_size ? ' · ' + l.lot_size.toLocaleString() + ' pc' : ''}`
@@ -2517,7 +2517,10 @@
           // image was cached. Placement is ours alone now.
           { maxWidth: Math.min(240, innerWidth - 90), autoPan: false, keepInView: false }
         );
-        mk.on('click', () => markSeen(l.mls));
+        mk.on('click', () => {
+          markSeen(l.mls);
+          placeAndOpen(entry, mk);
+        });
         mk.addTo(entry.layer);
         entry.markers.set(l.mls, mk);
         if (id === 'map') markerByMls.set(l.mls, mk);
