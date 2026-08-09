@@ -733,6 +733,21 @@
 
     @media (max-width: 640px) {
 
+      /* the page's own top padding would sit above the map, so it starts 24px
+         down and only reaches the top edge once scrolled past — remove it and
+         give the padding back to the views that still want it */
+      .wrap {
+        padding-top: 0;
+      }
+
+      #view-stats {
+        padding-top: 20px;
+      }
+
+      .stale {
+        margin-top: 20px;
+      }
+
       /* full-bleed and pinned: the map stays in view while the tables scroll
          under it. It sits outside .grid because a sticky grid item is confined
          to its own grid area and would never travel past its row. */
