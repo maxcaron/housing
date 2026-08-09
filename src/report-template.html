@@ -240,6 +240,174 @@
       gap: 6px;
     }
 
+    /* refresh + switcher + New + cog is a tight fit on a phone */
+    @media (max-width: 430px) {
+      .dock-bar {
+        padding: 10px 12px;
+        gap: 8px;
+      }
+
+      .dock-left {
+        gap: 8px;
+      }
+
+      .viewset button {
+        padding: 10px 12px;
+      }
+
+      .newbtn {
+        padding: 10px 11px;
+      }
+    }
+
+    .newbtn {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 550;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-1);
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    .newbtn:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    .newbtn:not(:disabled) {
+      background: var(--series-2);
+      border-color: transparent;
+      color: #fff;
+    }
+
+    .newbtn-count {
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.24);
+    }
+
+    .newbtn:disabled .newbtn-count {
+      background: var(--page);
+    }
+
+    /* full-screen review of everything not yet looked at */
+    .newmodal {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      background: var(--page);
+    }
+
+    .newmodal[hidden] {
+      display: none;
+    }
+
+    .newmodal-map {
+      flex: 1 1 50%;
+      min-height: 0;
+      isolation: isolate;
+    }
+
+    .newmodal-close {
+      position: absolute;
+      top: calc(12px + env(safe-area-inset-top, 0px));
+      right: 12px;
+      z-index: 2100;
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-1);
+      color: var(--text-primary);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+      cursor: pointer;
+    }
+
+    .newmodal-cards {
+      flex: 1 1 50%;
+      min-height: 0;
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scroll-snap-type: x mandatory;
+      padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .newcard {
+      flex: 0 0 min(330px, 84%);
+      scroll-snap-align: center;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface-1);
+    }
+
+    .newcard.selected {
+      border-color: var(--series-1);
+      box-shadow: 0 0 0 2px var(--series-1);
+    }
+
+    .newcard-photo {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      object-fit: cover;
+      background: var(--page);
+    }
+
+    .newcard-body {
+      flex: none;
+      padding: 10px 12px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .newcard-price {
+      font-size: 16px;
+      font-weight: 650;
+    }
+
+    .newcard-addr {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .newcard-facts {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .newcard-links {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    tbody tr.unseen td:first-child {
+      box-shadow: inset 3px 0 0 var(--series-2);
+    }
+
     .chipset {
       display: flex;
       flex-wrap: wrap;
@@ -892,6 +1060,7 @@
           <button type="button" data-view="listings" aria-pressed="true">Listings</button>
           <button type="button" data-view="stats" aria-pressed="false">Statistics</button>
         </div>
+        <button type="button" id="new-open" class="newbtn" disabled>New<span class="newbtn-count" id="new-count">0</span></button>
       </div>
       <button type="button" id="settings-cog" class="iconbtn cog" aria-label="Filters" aria-expanded="false"
         aria-controls="dock-panel">
@@ -928,6 +1097,17 @@
         <p class="hint">Range scopes activity (new / changes / delisted); area and type scope everything.</p>
       </div>
     </div>
+  </div>
+
+  <div class="newmodal" id="new-modal" hidden>
+    <div class="newmodal-map" id="new-map"></div>
+    <button type="button" class="newmodal-close" id="new-close" aria-label="Close">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+        stroke-linecap="round" aria-hidden="true">
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+    </button>
+    <div class="newmodal-cards" id="new-cards"></div>
   </div>
 
   <div id="tooltip" role="status"></div>
@@ -1053,6 +1233,24 @@
     const saveState = () => {
       try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch { }
     };
+
+    // Which listings have been looked at. Kept out of STORE_KEY because it grows
+    // with the market rather than with the handful of filter values.
+    const SEEN_KEY = 'housing-seen';
+    const seen = new Set();
+    {
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); } catch { }
+      if (Array.isArray(saved)) for (const k of saved) if (typeof k === 'string') seen.add(k);
+    }
+    const unseenListings = () => active().filter((l) => !seen.has(l.mls));
+    function markSeen(mls) {
+      if (!mls || seen.has(mls)) return false;
+      seen.add(mls);
+      try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seen])); } catch { }
+      syncNewButton();
+      return true;
+    }
     {
       let saved = null;
       try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch { }
@@ -1596,12 +1794,13 @@
 
     function tableRow(r, cols, focusable) {
       const tr = document.createElement('tr');
-      // only active listings get markers, so only they have something to focus
-      if (focusable && r.status === 'active' && r.lat && r.lng) {
+      if (focusable && r.status === 'active') {
         tr.style.cursor = 'pointer';
+        if (!seen.has(r.mls)) tr.classList.add('unseen');
         tr.addEventListener('click', (e) => {
-          if (e.target.closest('a')) return; // the Centris link keeps its own behavior
-          focusListing(r.mls);
+          if (e.target.closest('a')) return; // the listing link keeps its own behavior
+          if (markSeen(r.mls)) tr.classList.remove('unseen');
+          focusListing(r.mls); // no-ops when the listing has no marker
         });
       }
       for (const c of cols) {
@@ -1885,6 +2084,10 @@
       // flyTo to the current view fires no moveend — make sure the popup still opens
       setTimeout(() => { if (!mk.isPopupOpen()) mk.openPopup(); }, 1200);
     }
+    const listingFacts = (l) => l.type === 'lot'
+      ? `Lot${l.lot_size ? ' · ' + l.lot_size.toLocaleString() + ' pc' : ''}`
+      : `${l.rooms || '?'} rooms · ${l.bedrooms || '?'} bed · ${l.bathrooms || '?'} bath` +
+      `${l.year_built ? ' · built ' + l.year_built : ''}${l.lot_size ? ' · ' + l.lot_size.toLocaleString() + ' pc land' : ''}`;
     function quintileColor(price, qs) {
       const seq = ['--seq-1', '--seq-2', '--seq-3', '--seq-4', '--seq-5'];
       let i = 0;
@@ -1921,19 +2124,17 @@
           fillColor: l.type === 'lot' ? LOT_BROWN : quintileColor(l.price, qs), fillOpacity: 1,
         });
         const vsAssess = l.assess_total ? ` · ${Math.round((l.price / l.assess_total) * 100)}% of assess.` : '';
-        const facts = l.type === 'lot'
-          ? `Lot${l.lot_size ? ' · ' + l.lot_size.toLocaleString() + ' pc' : ''}`
-          : `${l.rooms || '?'} rooms · ${l.bedrooms || '?'} bed · ${l.bathrooms || '?'} bath` +
-          `${l.year_built ? ' · built ' + l.year_built : ''}${l.lot_size ? ' · ' + l.lot_size.toLocaleString() + ' pc land' : ''}`;
+        const facts = listingFacts(l);
         mk.bindPopup(
           (l.photo_url ? `<img src="${l.photo_url}" class="popup-photo" alt="">` : '') +
           `<b>${fmtMoney(l.price)}</b>${vsAssess}<br>` +
           `${l.address.replace(/[<>&]/g, '')}, ${l.city.replace(/[<>&]/g, '')}<br>` +
           facts + `<br>` +
-          `<a href="${l.url}" target="_blank" rel="noopener">Centris ↗</a>`,
+          `<a href="${l.url}" target="_blank" rel="noopener">${sourceLabel(l.source)} ↗</a>`,
           // sized for phones: never wider than the map, popup stays fully in view
           { maxWidth: Math.min(240, innerWidth - 90), keepInView: true, autoPanPadding: L.point(24, 24) }
         );
+        mk.on('click', () => markSeen(l.mls));
         mk.addTo(markerLayer);
         markerByMls.set(l.mls, mk);
       }
@@ -1950,6 +2151,155 @@
       map.fitBounds(mapBounds);
     }
 
+    // ---------------------------------------------------------------- new listings
+    // The queue is snapshotted when the modal opens. Cards are marked seen as
+    // they scroll past, so recomputing the list live would rebuild the carousel
+    // under the finger.
+    const PLAIN_MARKER = { radius: 7, weight: 2, color: '#ffffff', fillOpacity: 1 };
+    const SELECTED_MARKER = { radius: 11, weight: 3, color: '#ffffff', fillOpacity: 1 };
+    let newMap = null, newMarkerLayer = null;
+    let newQueue = [], newCards = [], newMarkers = [], newIndex = -1;
+
+    function syncNewButton() {
+      const count = unseenListings().length;
+      $('#new-count').textContent = String(count);
+      $('#new-open').disabled = count === 0;
+    }
+
+    function markerFill(l) {
+      return l.type === 'lot' ? '#a15c1e' : css('--series-2');
+    }
+
+    function selectNewIndex(i) {
+      if (i < 0 || i >= newQueue.length || i === newIndex) return;
+      newIndex = i;
+      newCards.forEach((card, k) => card.classList.toggle('selected', k === i));
+      newMarkers.forEach((mk, k) => {
+        if (!mk) return;
+        const style = k === i ? SELECTED_MARKER : PLAIN_MARKER;
+        mk.setStyle({ ...style, fillColor: markerFill(newQueue[k]) });
+        if (k === i && mk.bringToFront) mk.bringToFront();
+      });
+      const mk = newMarkers[i];
+      if (newMap && mk) newMap.panTo(mk.getLatLng());
+      markSeen(newQueue[i].mls);
+    }
+
+    function buildNewCard(l, i) {
+      const card = document.createElement('div');
+      card.className = 'newcard';
+      if (l.photo_url) {
+        const img = document.createElement('img');
+        img.className = 'newcard-photo';
+        img.src = l.photo_url;
+        img.alt = '';
+        img.loading = 'lazy';
+        card.appendChild(img);
+      }
+      const body = document.createElement('div');
+      body.className = 'newcard-body';
+      const price = document.createElement('div');
+      price.className = 'newcard-price';
+      price.textContent = fmtMoney(l.price) +
+        (l.assess_total ? ` · ${Math.round((l.price / l.assess_total) * 100)}% of assess.` : '');
+      const addr = document.createElement('div');
+      addr.className = 'newcard-addr';
+      addr.textContent = `${l.address}, ${l.city}`;
+      const facts = document.createElement('div');
+      facts.className = 'newcard-facts';
+      facts.textContent = listingFacts(l);
+      const links = document.createElement('div');
+      links.className = 'newcard-links';
+      const badge = document.createElement('span');
+      badge.className = 'pill';
+      badge.textContent = sourceLabel(l.source);
+      const link = document.createElement('a');
+      link.href = l.url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = 'View listing ↗';
+      links.append(badge, link);
+      body.append(price, addr, facts, links);
+      card.appendChild(body);
+      card.addEventListener('click', (e) => {
+        if (!e.target.closest('a')) selectNewIndex(i);
+      });
+      return card;
+    }
+
+    function scrollCardIntoView(i) {
+      newCards[i]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+
+    function buildNewMap() {
+      if (typeof L === 'undefined') return;
+      if (!newMap) {
+        newMap = L.map('new-map', { scrollWheelZoom: true, zoomControl: false });
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 18, attribution: '&copy; OpenStreetMap contributors',
+        }).addTo(newMap);
+      }
+      if (newMarkerLayer) newMarkerLayer.remove();
+      newMarkerLayer = L.layerGroup().addTo(newMap);
+      newMarkers = newQueue.map((l, i) => {
+        if (!l.lat || !l.lng) return null;
+        const mk = L.circleMarker([l.lat, l.lng], { ...PLAIN_MARKER, fillColor: markerFill(l) });
+        // no popup here: the card carries the detail, the marker only shows which
+        mk.on('click', () => { selectNewIndex(i); scrollCardIntoView(i); });
+        mk.addTo(newMarkerLayer);
+        return mk;
+      });
+      const pts = newQueue.filter((l) => l.lat && l.lng).map((l) => [l.lat, l.lng]);
+      const bounds = pts.length ? L.latLngBounds(pts).pad(0.2) : null;
+      if (bounds) newMap.fitBounds(bounds);
+      // the modal was display:none until a moment ago, so Leaflet has no size yet
+      setTimeout(() => {
+        newMap.invalidateSize();
+        const mk = newMarkers[newIndex];
+        if (mk) newMap.setView(mk.getLatLng(), Math.max(newMap.getZoom(), 13));
+        else if (bounds) newMap.fitBounds(bounds);
+      }, 60);
+    }
+
+    function openNewModal() {
+      newQueue = unseenListings();
+      if (!newQueue.length) return;
+      const box = $('#new-cards');
+      box.textContent = '';
+      newCards = newQueue.map((l, i) => {
+        const card = buildNewCard(l, i);
+        box.appendChild(card);
+        return card;
+      });
+      newIndex = -1;
+      $('#new-modal').hidden = false;
+      buildNewMap();
+      selectNewIndex(0);
+    }
+
+    function closeNewModal() {
+      if ($('#new-modal').hidden) return;
+      $('#new-modal').hidden = true;
+      renderAll(); // the tables and the button pick up everything just marked seen
+    }
+
+    $('#new-open').addEventListener('click', openNewModal);
+    $('#new-close').addEventListener('click', closeNewModal);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNewModal(); });
+    {
+      const box = $('#new-cards');
+      box.addEventListener('scroll', () => {
+        if (!newCards.length) return;
+        const middle = box.scrollLeft + box.clientWidth / 2;
+        let best = 0, bestDistance = Infinity;
+        newCards.forEach((card, i) => {
+          const distance = Math.abs(card.offsetLeft + card.offsetWidth / 2 - middle);
+          if (distance < bestDistance) { bestDistance = distance; best = i; }
+        });
+        selectNewIndex(best);
+      });
+    }
+
     // ---------------------------------------------------------------- render
     function renderAll() {
       renderTiles();
@@ -1961,6 +2311,7 @@
       renderTable();
       renderGone();
       renderMap();
+      syncNewButton();
     }
     buildFilterPopup('changes-fpop', CHANGE_COLS, changeFilters, () => renderChangeBody(),
       ['price', 'address', 'delta']);
