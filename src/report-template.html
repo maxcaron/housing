@@ -890,7 +890,7 @@
       const launchedFromHomeScreen =
         navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
       const hasTouchScreen = matchMedia('(pointer: coarse)').matches;
-      refreshButton.hidden = !(launchedFromHomeScreen || hasTouchScreen);
+      refreshButton.hidden = !(launchedFromHomeScreen && hasTouchScreen);
       refreshButton.addEventListener('click', () => {
         refreshButton.disabled = true;
         refreshButton.textContent = 'Refreshing…';
