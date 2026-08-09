@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Housing tracker</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
@@ -88,6 +88,9 @@
       background: var(--page);
       color: var(--text-primary);
       font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+      /* no double-tap zoom, and no text inflation on rotate */
+      touch-action: manipulation;
+      -webkit-text-size-adjust: 100%;
     }
 
     .wrap {
@@ -1630,6 +1633,17 @@
         syncFilterIndicator();
         renderAll();
       });
+    }
+
+    // ---------------------------------------------------------------- zoom
+    // iOS honours pinch-zoom through gesture events even when the viewport says
+    // not to, so refuse them outside a map. Leaflet drives its own pinch from
+    // touch events, so the maps keep zooming normally.
+    for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+      document.addEventListener(type, (e) => {
+        if (e.target && e.target.closest && e.target.closest('.leaflet-container')) return;
+        e.preventDefault();
+      }, { passive: false });
     }
 
     // ---------------------------------------------------------------- tables
