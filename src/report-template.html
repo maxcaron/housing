@@ -918,12 +918,12 @@
           <div class="chipset" id="area-chips" role="group" aria-label="Areas"></div>
         </div>
         <div class="dock-row">
-          <label class="dock-label" for="type-filter">Type</label>
-          <select id="type-filter">
-            <option value="all">All types</option>
-            <option value="house">Houses</option>
-            <option value="lot">Lots</option>
-          </select>
+          <span class="dock-label">Type</span>
+          <div class="chipset" id="type-chips" role="group" aria-label="Property types"></div>
+        </div>
+        <div class="dock-row">
+          <span class="dock-label">Source</span>
+          <div class="chipset" id="source-chips" role="group" aria-label="Sources"></div>
         </div>
         <p class="hint">Range scopes activity (new / changes / delisted); area and type scope everything.</p>
       </div>
@@ -1033,9 +1033,20 @@
     // starts from the bookmarked URL and keeps no query string — comes back to
     // the same slice of the market.
     const STORE_KEY = 'housing-view-state';
-    const state = { areas: [], type: 'all', days: 0, view: 'listings' };
-    const FILTER_DEFAULTS = { type: state.type, days: state.days };
+    const state = { areas: [], types: [], sources: [], days: 0, view: 'listings' };
+    const FILTER_DEFAULTS = { days: state.days };
+    // an empty list means "no filter", so every chip group clears rather than
+    // carrying an "all" value of its own
+    const CHIP_GROUPS = [
+      { key: 'areas', box: '#area-chips' },
+      { key: 'types', box: '#type-chips' },
+      { key: 'sources', box: '#source-chips' },
+    ];
     const areas = [...new Set(DATA.listings.map((l) => l.city))].sort();
+    const sources = [...new Set(DATA.listings.map((l) => l.source))].filter(Boolean).sort();
+    const DASH = '—';
+    const SOURCE_LABELS = { centris: 'Centris', duproprio: 'DuProprio' };
+    const sourceLabel = (s) => SOURCE_LABELS[s] ?? s ?? DASH;
     const areaNote = () => state.areas.length === 0 ? 'all areas'
       : state.areas.length === 1 ? state.areas[0]
       : `${state.areas.length} areas`;
@@ -1048,14 +1059,16 @@
       if (saved) {
         // an area that has since left the data would empty the page with no visible cause
         if (Array.isArray(saved.areas)) state.areas = saved.areas.filter((a) => areas.includes(a));
-        if (['all', 'house', 'lot'].includes(saved.type)) state.type = saved.type;
+        if (Array.isArray(saved.types)) state.types = saved.types.filter((t) => ['house', 'lot'].includes(t));
+        if (Array.isArray(saved.sources)) state.sources = saved.sources.filter((s) => sources.includes(s));
         if ([0, 7, 30, 90].includes(saved.days)) state.days = saved.days;
         if (typeof saved.view === 'string') state.view = saved.view;
       }
     }
     const inScope = (l) => l &&
       (state.areas.length === 0 || state.areas.includes(l.city)) &&
-      (state.type === 'all' || l.type === state.type);
+      (state.types.length === 0 || state.types.includes(l.type)) &&
+      (state.sources.length === 0 || state.sources.includes(l.source));
     const active = () => DATA.listings.filter((l) => l.status === 'active' && inScope(l));
     const eventsInRange = () => {
       const cutoff = state.days ? now - state.days * DAY : 0;
@@ -1095,44 +1108,48 @@
 
     // ---------------------------------------------------------------- filters
     {
-      // an empty selection means every area, so the All chip is a clear rather
-      // than a value of its own
-      const chipBox = $('#area-chips');
-      const chips = [];
-      for (const [label, area] of [['All', ''], ...areas.map((a) => [a, a])]) {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'chip';
-        chip.textContent = label;
-        chip.dataset.area = area;
-        chipBox.appendChild(chip);
-        chips.push(chip);
-      }
-      const syncChips = () => {
-        for (const chip of chips) {
-          const on = chip.dataset.area === ''
-            ? state.areas.length === 0
-            : state.areas.includes(chip.dataset.area);
-          chip.setAttribute('aria-pressed', String(on));
-        }
+      const typeLabels = { house: 'Houses', lot: 'Lots' };
+      const groupOptions = {
+        areas: areas.map((a) => [a, a]),
+        types: ['house', 'lot'].map((t) => [typeLabels[t], t]),
+        sources: sources.map((x) => [sourceLabel(x), x]),
       };
-      chipBox.addEventListener('click', (e) => {
-        const chip = e.target.closest('button');
-        if (!chip) return;
-        const area = chip.dataset.area;
-        if (area === '') state.areas = [];
-        else if (state.areas.includes(area)) state.areas = state.areas.filter((a) => a !== area);
-        else state.areas = [...state.areas, area];
-        syncChips();
-        saveState(); syncFilterIndicator(); renderAll();
-      });
-      syncChips();
-      const tsel = $('#type-filter');
-      tsel.value = state.type;
-      tsel.addEventListener('change', () => {
-        state.type = tsel.value;
-        saveState(); syncFilterIndicator(); renderAll();
-      });
+      const syncers = [];
+      for (const group of CHIP_GROUPS) {
+        const box = $(group.box);
+        const chips = [];
+        for (const [label, value] of [['All', ''], ...groupOptions[group.key]]) {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'chip';
+          chip.textContent = label;
+          chip.dataset.value = value;
+          box.appendChild(chip);
+          chips.push(chip);
+        }
+        const sync = () => {
+          for (const chip of chips) {
+            const on = chip.dataset.value === ''
+              ? state[group.key].length === 0
+              : state[group.key].includes(chip.dataset.value);
+            chip.setAttribute('aria-pressed', String(on));
+          }
+        };
+        syncers.push(sync);
+        box.addEventListener('click', (e) => {
+          const chip = e.target.closest('button');
+          if (!chip) return;
+          const value = chip.dataset.value;
+          const picked = state[group.key];
+          if (value === '') state[group.key] = [];
+          else if (picked.includes(value)) state[group.key] = picked.filter((v) => v !== value);
+          else state[group.key] = [...picked, value];
+          sync();
+          saveState(); syncFilterIndicator(); renderAll();
+        });
+        sync();
+      }
+
       const rangeset = $('#rangeset');
       for (const b of rangeset.querySelectorAll('button')) {
         b.setAttribute('aria-pressed', String(Number(b.dataset.days) === state.days));
@@ -1170,7 +1187,7 @@
     // slice, so a filter left on from a previous session is visible without
     // opening the panel.
     function syncFilterIndicator() {
-      const narrowed = state.areas.length > 0 ||
+      const narrowed = CHIP_GROUPS.some((g) => state[g.key].length > 0) ||
         Object.entries(FILTER_DEFAULTS).some(([key, value]) => state[key] !== value);
       $('#settings-cog').dataset.filtered = String(narrowed);
     }
@@ -1531,7 +1548,6 @@
     // ---------------------------------------------------------------- table columns
     // Every table shares one listing column set in one order; a table's own
     // columns are appended after it.
-    const DASH = '—';
     const latestRelistAt = new Map();
     for (const e of DATA.events) {
       if ((e.kind === 'relisted' || e.kind === 'renumbered') && !latestRelistAt.has(e.mls)) {
@@ -1541,6 +1557,7 @@
     const listingRow = (l) => ({
       ...l,
       type: typeLabel(l.type),
+      source: sourceLabel(l.source),
       tracked: daysTracked(l),
       first_seen: l.first_seen.slice(0, 10),
       relisted: latestRelistAt.get(l.mls)?.slice(0, 10) ?? null,
@@ -1551,6 +1568,7 @@
       { key: 'address', label: 'Address' },
       { key: 'city', label: 'Area' },
       { key: 'type', label: 'Type' },
+      { key: 'source', label: 'Source', nowrap: true },
       { key: 'price', label: 'Price', num: true, fmt: (r) => fmtMoney(r.price) },
       { key: 'assess_lot', label: 'Eval. lot', num: true, fmt: (r) => r.assess_lot ? fmtMoney(r.assess_lot) : DASH },
       { key: 'assess_building', label: 'Eval. home', num: true, fmt: (r) => r.assess_building ? fmtMoney(r.assess_building) : DASH },
