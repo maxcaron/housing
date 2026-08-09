@@ -768,26 +768,38 @@
         border-radius: 0;
       }
 
-      /* a 30vh map leaves little room above the pin, so the popup's photo has
-         to give some back */
+      /* a 30vh map leaves little room above the pin, so the photo gives some back */
       .popup-photo {
-        max-height: 80px;
+        max-height: 60px;
       }
     }
 
+    /* the photo runs edge to edge; only the text block carries padding */
     .leaflet-popup-content {
-      margin: 10px 12px;
+      margin: 0;
       font-size: 12.5px;
-      line-height: 1.45;
+      line-height: 1.4;
     }
 
     .popup-photo {
-      width: 100%;
-      max-height: 120px;
-      object-fit: cover;
-      border-radius: 6px;
       display: block;
-      margin-bottom: 6px;
+      width: 100%;
+      max-height: 88px;
+      object-fit: cover;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .popup-body {
+      padding: 8px 10px;
+      max-width: 220px;
+    }
+
+    /* one fact per line, clipped rather than wrapped, so popup height is
+       predictable whatever the address length */
+    .popup-line {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     #map-fallback,
@@ -2280,12 +2292,15 @@
     // The listings view and the favourites view draw the same kind of map, so
     // one renderer serves both; each keeps its own instance, layer and bounds.
     const mapStates = {};
+    const mapIsPinned = () => matchMedia('(max-width: 640px)').matches;
     const markerByMls = new Map();
     function focusListing(mls) {
       const entry = mapStates[state.view === 'favorites' ? 'fav-map' : 'map'];
       const mk = entry && entry.markers.get(mls);
       if (!mk) return;
-      $('#' + entry.id).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // the mobile map is sticky and therefore always visible; scrolling to it
+      // would only drag the table out from under the finger
+      if (!mapIsPinned()) $('#' + entry.id).scrollIntoView({ behavior: 'smooth', block: 'center' });
       const zoom = Math.max(entry.map.getZoom(), 14);
       // Popups open upward, so the pin sits a fixed 25px off the bottom edge and
       // every pixel above it belongs to the popup. Horizontal centring is
@@ -2353,10 +2368,12 @@
         mk.bindPopup(
           `<span class="popup-star-slot" data-mls="${l.mls}"></span>` +
           (l.photo_url ? `<img src="${l.photo_url}" class="popup-photo" alt="">` : '') +
-          `<b>${fmtMoney(l.price)}</b>${vsAssess}<br>` +
-          `${l.address.replace(/[<>&]/g, '')}, ${l.city.replace(/[<>&]/g, '')}<br>` +
-          listingFacts(l) + `<br>` +
-          `<a href="${l.url}" target="_blank" rel="noopener">${sourceLabel(l.source)} ↗</a>`,
+          `<div class="popup-body">` +
+          `<div class="popup-line"><b>${fmtMoney(l.price)}</b>${vsAssess}</div>` +
+          `<div class="popup-line">${l.address.replace(/[<>&]/g, '')}, ${l.city.replace(/[<>&]/g, '')}</div>` +
+          `<div class="popup-line">${listingFacts(l)}</div>` +
+          `<div class="popup-line"><a href="${l.url}" target="_blank" rel="noopener">${sourceLabel(l.source)} ↗</a></div>` +
+          `</div>`,
           // sized for phones: never wider than the map, popup stays fully in view
           { maxWidth: Math.min(240, innerWidth - 90), keepInView: true, autoPanPadding: L.point(24, 24) }
         );
