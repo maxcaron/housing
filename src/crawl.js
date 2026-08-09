@@ -12,7 +12,8 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { log, logInit, ContractError } from './log.js';
-import { crawlSearch, fetchDetail, parseDetail, DETAIL_THROTTLE_MS } from './centris.js';
+import * as centris from './centris.js';
+import * as duproprio from './duproprio.js';
 import { openDb, runStart, runFinish, lastOkCount, applyCrawl, saveDetails } from './db.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -29,7 +30,7 @@ function archiveRaw(search, rawPages) {
 // are fetched once per MLS number — the values don't change. A failed page is
 // logged and retried on the next run (detail_fetched_at stays NULL); it never
 // blocks the listing/event diff, which has already been applied.
-async function fetchMissingDetails(db, search) {
+async function fetchMissingDetails(db, search, client) {
   const missing = db.prepare(
     `SELECT mls, url FROM listing WHERE search = ? AND status = 'active' AND detail_fetched_at IS NULL`
   ).all(search);
@@ -39,11 +40,13 @@ async function fetchMissingDetails(db, search) {
   const rawDir = path.join(ROOT, 'data', 'raw', 'details');
   fs.mkdirSync(rawDir, { recursive: true });
   for (const [i, l] of missing.entries()) {
-    await new Promise((r) => setTimeout(r, DETAIL_THROTTLE_MS));
+    await new Promise((r) => setTimeout(r, client.DETAIL_THROTTLE_MS));
     try {
-      const html = await fetchDetail(l.url);
-      const d = parseDetail(html, l.mls);
-      fs.writeFileSync(path.join(rawDir, `${l.mls}.html.gz`), zlib.gzipSync(html));
+      const raw = await client.fetchDetail(l.url);
+      const d = client.parseDetail(raw, l.mls);
+      const body = typeof raw === 'string' ? raw : JSON.stringify(raw);
+      const ext = typeof raw === 'string' ? 'html' : 'json';
+      fs.writeFileSync(path.join(rawDir, `${l.mls}.${ext}.gz`), zlib.gzipSync(body));
       saveDetails(db, l.mls, d);
       out.detail_ok++;
       log.debug('detail_saved', { mls: l.mls, ...d });
@@ -61,14 +64,24 @@ async function fetchMissingDetails(db, search) {
   return out;
 }
 
-async function runOne(db, search) {
-  const runId = runStart(db, search.name);
-  log.info('crawl_start', { search: search.name, label: search.label });
-  try {
-    const { listings, count, rawPages } = await crawlSearch(search);
+const CLIENTS = { centris, duproprio };
 
-    // Centris ignores filters it can't parse and happily returns all of Quebec
-    // (~25k listings), and a half-broken query can also return far too little.
+async function runOne(db, search) {
+  const client = CLIENTS[search.source];
+  if (!client) {
+    throw new ContractError('unknown_source', `search "${search.name}" has source "${search.source}"`, {
+      search: search.name,
+      known: Object.keys(CLIENTS),
+    });
+  }
+  const runId = runStart(db, search.name);
+  log.info('crawl_start', { search: search.name, source: search.source, label: search.label });
+  try {
+    const { listings, count, rawPages } = await client.crawlSearch(search);
+
+    // Both sites drop filters they can't parse instead of erroring — Centris
+    // then returns all of Quebec (~25k listings), DuProprio returns zero. Either
+    // way a half-broken query is a wild swing, not data.
     // A wild swing vs the last good run is treated as an error, not data.
     const prev = lastOkCount(db, search.name);
     if (prev !== undefined && prev >= 10 && (count > prev * 2 || count < prev * 0.5)) {
@@ -87,7 +100,7 @@ async function runOne(db, search) {
 
     const rawFile = archiveRaw(search.name, rawPages);
     const stats = applyCrawl(db, runId, search, listings);
-    const details = await fetchMissingDetails(db, search.name);
+    const details = await fetchMissingDetails(db, search.name, client);
     runFinish(db, runId, { status: 'ok', count });
     log.info('crawl_ok', { search: search.name, count, raw: path.relative(ROOT, rawFile), ...stats, ...details });
     return details.detail_failed === 0 || details.detail_ok > 0;

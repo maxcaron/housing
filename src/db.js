@@ -74,26 +74,34 @@ export function openDb() {
     assess_total: 'INTEGER',
     detail_fetched_at: 'TEXT',
     type: 'TEXT',      // house | lot — from the search's config entry
-    photo_url: 'TEXT', // Centris thumbnail (mspublic.centris.ca)
+    photo_url: 'TEXT', // listing thumbnail
     renumbered_to: 'TEXT', // set when a broker relists under a fresh MLS number
+    source: 'TEXT',        // centris | duproprio
+    published_at: 'TEXT',  // the site's own listing date; only DuProprio publishes one
   };
   for (const [col, type] of Object.entries(wanted)) {
     if (!have.has(col)) db.exec(`ALTER TABLE listing ADD COLUMN ${col} ${type}`);
   }
+  // every row that predates the column came from Centris
+  db.exec(`UPDATE listing SET source = 'centris' WHERE source IS NULL`);
   const haveEvent = new Set(db.prepare(`PRAGMA table_info(event)`).all().map((c) => c.name));
   if (!haveEvent.has('old_mls')) db.exec(`ALTER TABLE event ADD COLUMN old_mls TEXT`);
   return db;
 }
 
+// DuProprio's map rows carry no room counts and Centris's cards do, so bedrooms
+// and bathrooms are filled in only when the detail actually supplies them.
 export function saveDetails(db, mls, d) {
   db.prepare(`
     UPDATE listing SET rooms = @rooms, year_built = @year_built, living_area = @living_area,
       lot_size = @lot_size, parking = @parking, parking_count = @parking_count,
       assess_year = @assess_year, assess_lot = @assess_lot,
       assess_building = @assess_building, assess_total = @assess_total,
+      bedrooms = COALESCE(@bedrooms, bedrooms), bathrooms = COALESCE(@bathrooms, bathrooms),
+      published_at = COALESCE(@published_at, published_at),
       detail_fetched_at = @now
     WHERE mls = @mls
-  `).run({ ...d, mls, now: new Date().toISOString() });
+  `).run({ bedrooms: null, bathrooms: null, published_at: null, ...d, mls, now: new Date().toISOString() });
 }
 
 export function runStart(db, search) {
@@ -126,14 +134,15 @@ export function applyCrawl(db, runId, search, listings) {
 
   const getListing = db.prepare(`SELECT mls, current_price, status FROM listing WHERE mls = ?`);
   const insertListing = db.prepare(`
-    INSERT INTO listing (mls, search, type, url, address, city, lat, lng, bedrooms, bathrooms, category,
+    INSERT INTO listing (mls, search, source, type, url, address, city, lat, lng, bedrooms, bathrooms, category,
                          photo_url, first_seen, last_seen, current_price, status)
-    VALUES (@mls, @search, @type, @url, @address, @city, @lat, @lng, @bedrooms, @bathrooms, @category,
+    VALUES (@mls, @search, @source, @type, @url, @address, @city, @lat, @lng, @bedrooms, @bathrooms, @category,
             @photo, @first_seen, @now, @price, 'active')
   `);
   const touchListing = db.prepare(`
     UPDATE listing SET last_seen = ?, current_price = ?, status = 'active', type = ?,
-                       url = ?, address = ?, city = ?, lat = ?, lng = ?, bedrooms = ?, bathrooms = ?,
+                       url = ?, address = ?, city = ?, lat = ?, lng = ?,
+                       bedrooms = COALESCE(?, bedrooms), bathrooms = COALESCE(?, bathrooms),
                        photo_url = COALESCE(?, photo_url)
     WHERE mls = ?
   `);
@@ -163,12 +172,12 @@ export function applyCrawl(db, runId, search, listings) {
         if (old) {
           renumberedMls.add(old.mls);
           markRenumbered.run(l.mls, old.mls);
-          insertListing.run({ ...l, search: search.name, type: search.type, now, first_seen: old.first_seen });
+          insertListing.run({ ...l, search: search.name, source: search.source, type: search.type, now, first_seen: old.first_seen });
           insertEvent.run(l.mls, now, 'renumbered', l.price, old.current_price, old.mls, runId);
           stats.renumbered++;
           log.info('event_renumbered', { mls: l.mls, old_mls: old.mls, price: l.price, address: l.address });
         } else {
-          insertListing.run({ ...l, search: search.name, type: search.type, now, first_seen: now });
+          insertListing.run({ ...l, search: search.name, source: search.source, type: search.type, now, first_seen: now });
           insertEvent.run(l.mls, now, 'listed', l.price, null, null, runId);
           stats.listed++;
           log.info('event_listed', { mls: l.mls, price: l.price, address: l.address });

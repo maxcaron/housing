@@ -83,7 +83,8 @@
         }
       ]
     },
-    "type": "house"
+    "type": "house",
+    "source": "centris"
   },
   {
     "name": "quebec-nord-lots",
@@ -169,6 +170,69 @@
         }
       ]
     },
+    "type": "lot",
+    "source": "centris"
+  },
+  {
+    "name": "quebec-nord-dp",
+    "label": "DuProprio maisons — NDL/Charlesbourg, Lac-St-Charles, Lac-Beauport, Ste-Brigitte-de-Laval, Stoneham",
+    "source": "duproprio",
+    "cities": [
+      172,
+      17795,
+      489,
+      999,
+      558,
+      1612
+    ],
+    "cityNames": {
+      "172": "Québec (Charlesbourg)",
+      "17795": "Québec (Charlesbourg)",
+      "489": "Lac-Beauport",
+      "999": "Stoneham-et-Tewkesbury",
+      "558": "Québec (La Haute-Saint-Charles)",
+      "1612": "Sainte-Brigitte-de-Laval"
+    },
+    "bounds": {
+      "min_latitude": 46.7,
+      "max_latitude": 47.2,
+      "min_longitude": -71.6,
+      "max_longitude": -71.0
+    },
+    "types": [
+      "house"
+    ],
+    "type": "house"
+  },
+  {
+    "name": "quebec-nord-dp-lots",
+    "label": "DuProprio terrains — NDL/Charlesbourg, Lac-St-Charles, Lac-Beauport, Ste-Brigitte-de-Laval, Stoneham",
+    "source": "duproprio",
+    "cities": [
+      172,
+      17795,
+      489,
+      999,
+      558,
+      1612
+    ],
+    "cityNames": {
+      "172": "Québec (Charlesbourg)",
+      "17795": "Québec (Charlesbourg)",
+      "489": "Lac-Beauport",
+      "999": "Stoneham-et-Tewkesbury",
+      "558": "Québec (La Haute-Saint-Charles)",
+      "1612": "Sainte-Brigitte-de-Laval"
+    },
+    "bounds": {
+      "min_latitude": 46.7,
+      "max_latitude": 47.2,
+      "min_longitude": -71.6,
+      "max_longitude": -71.0
+    },
+    "types": [
+      "terr"
+    ],
     "type": "lot"
   }
 ]
