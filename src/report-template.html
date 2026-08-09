@@ -701,7 +701,8 @@
       display: inline-block;
     }
 
-    #map {
+    #map,
+    #fav-map {
       height: 420px;
       border-radius: 8px;
       background: var(--page);
@@ -711,18 +712,20 @@
     }
 
     @media (max-width: 640px) {
-      #map {
+
+      #map,
+      #fav-map {
         height: 70vh;
       }
     }
 
-    #map .leaflet-popup-content {
+    .leaflet-popup-content {
       margin: 10px 12px;
       font-size: 12.5px;
       line-height: 1.45;
     }
 
-    #map .popup-photo {
+    .popup-photo {
       width: 100%;
       max-height: 120px;
       object-fit: cover;
@@ -731,10 +734,60 @@
       margin-bottom: 6px;
     }
 
-    #map-fallback {
+    #map-fallback,
+    #fav-map-fallback {
       color: var(--text-muted);
       padding: 20px 0;
       display: none;
+    }
+
+    .star {
+      flex: none;
+      display: inline-grid;
+      place-items: center;
+      padding: 2px;
+      border: 0;
+      background: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      line-height: 0;
+    }
+
+    .star svg {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+    }
+
+    .star[aria-pressed="true"] {
+      color: var(--series-4);
+    }
+
+    .star[aria-pressed="true"] svg {
+      fill: var(--series-4);
+    }
+
+    /* on the card and in the popup the star floats over content, so it needs a
+       surface of its own to stay legible */
+    .star-float {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 3;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    }
+
+    .newcard {
+      position: relative;
+    }
+
+    .leaflet-popup-content-wrapper {
+      position: relative;
     }
 
     table {
@@ -1011,6 +1064,27 @@
       </div>
     </section>
 
+    <section id="view-favorites" hidden>
+      <div class="grid">
+        <div class="card full">
+          <h2>Map</h2>
+          <p class="desc">Your starred listings</p>
+          <div id="fav-map"></div>
+          <div id="fav-map-fallback">Map tiles need an internet connection.</div>
+        </div>
+        <div class="card full">
+          <div class="card-top">
+            <div>
+              <h2>Favourites</h2>
+              <p class="desc">Listings you have starred. Tap a star again to drop one.</p>
+            </div>
+            <div class="fpop-wrap" id="fav-fpop"></div>
+          </div>
+          <div class="table-scroll" id="fav-table"></div>
+        </div>
+      </div>
+    </section>
+
     <section id="view-stats" hidden>
       <div class="tiles" id="tiles"></div>
       <div class="grid">
@@ -1057,8 +1131,24 @@
           </svg>
         </button>
         <div class="viewset" id="viewset" role="group" aria-label="View">
-          <button type="button" data-view="listings" aria-pressed="true">Listings</button>
-          <button type="button" data-view="stats" aria-pressed="false">Statistics</button>
+          <button type="button" data-view="listings" aria-pressed="true" aria-label="Listings" title="Listings">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+            </svg>
+          </button>
+          <button type="button" data-view="stats" aria-pressed="false" aria-label="Statistics" title="Statistics">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 20V10M12 20V4M19 20v-6" />
+            </svg>
+          </button>
+          <button type="button" data-view="favorites" aria-pressed="false" aria-label="Favourites" title="Favourites">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9"
+              stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3.6l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.62l-5.1 2.68.98-5.68L3.75 9.6l5.7-.83z" />
+            </svg>
+          </button>
         </div>
         <button type="button" id="new-open" class="newbtn" disabled>New<span class="newbtn-count" id="new-count">0</span></button>
       </div>
@@ -1244,6 +1334,47 @@
       if (Array.isArray(saved)) for (const k of saved) if (typeof k === 'string') seen.add(k);
     }
     const unseenListings = () => active().filter((l) => !seen.has(l.mls));
+
+    // Starred listings. Unlike the seen set these are chosen deliberately, so
+    // they ignore the current filters — a favourite stays reachable whatever the
+    // dashboard is scoped to.
+    const FAV_KEY = 'housing-favorites';
+    const favorites = new Set();
+    {
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { }
+      if (Array.isArray(saved)) for (const k of saved) if (typeof k === 'string') favorites.add(k);
+    }
+    const favoriteListings = () => DATA.listings.filter((l) => favorites.has(l.mls));
+    // every star drawn for a listing registers here so one tap updates the copy
+    // in the table, on the card and inside the map popup at once
+    const starSyncs = new Map();
+    function toggleFavorite(mls) {
+      if (favorites.has(mls)) favorites.delete(mls);
+      else favorites.add(mls);
+      try { localStorage.setItem(FAV_KEY, JSON.stringify([...favorites])); } catch { }
+      for (const sync of starSyncs.get(mls) ?? []) sync();
+      if (state.view === 'favorites') renderFavorites();
+    }
+    const STAR_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">' +
+      '<path d="M12 3.6l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.62l-5.1 2.68.98-5.68L3.75 9.6l5.7-.83z"/></svg>';
+    function starButton(mls, className) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = className || 'star';
+      button.setAttribute('aria-label', 'Favourite');
+      button.dataset.mls = mls;
+      button.innerHTML = STAR_SVG;
+      const sync = () => button.setAttribute('aria-pressed', String(favorites.has(mls)));
+      sync();
+      if (!starSyncs.has(mls)) starSyncs.set(mls, new Set());
+      starSyncs.get(mls).add(sync);
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFavorite(mls);
+      });
+      return button;
+    }
     function markSeen(mls) {
       if (!mls || seen.has(mls)) return false;
       seen.add(mls);
@@ -1364,7 +1495,7 @@
     }
 
     // ---------------------------------------------------------------- views
-    const VIEWS = { listings: '#view-listings', stats: '#view-stats' };
+    const VIEWS = { listings: '#view-listings', stats: '#view-stats', favorites: '#view-favorites' };
     function showView(name) {
       if (!(name in VIEWS)) name = 'listings';
       state.view = name;
@@ -1373,7 +1504,8 @@
       for (const b of $('#viewset').querySelectorAll('button')) {
         b.setAttribute('aria-pressed', String(b.dataset.view === name));
       }
-      if (name === 'listings') revealMap();
+      if (name === 'listings') revealMap('map');
+      if (name === 'favorites') { renderFavorites(); revealMap('fav-map'); }
     }
     $('#viewset').addEventListener('click', (e) => {
       const b = e.target.closest('button');
@@ -1818,7 +1950,7 @@
       }
       const tdl = document.createElement('td');
       tdl.className = 'eye-cell';
-      tdl.appendChild(centrisEyeLink(r.url));
+      tdl.append(starButton(r.mls), centrisEyeLink(r.url));
       tr.appendChild(tdl);
       return tr;
     }
@@ -2072,15 +2204,38 @@
       });
     }
 
+    // ---------------------------------------------------------------- favourites
+    const favSort = { key: 'first_seen', dir: -1 };
+    const favFilters = {};
+    let renderFavBody = () => {};
+    function renderFavorites() {
+      const root = $('#fav-table');
+      root.textContent = '';
+      const rows = favoriteListings().map(listingRow);
+      if (!rows.length) {
+        root.innerHTML = '<div class="empty">Nothing starred yet — tap a star on any listing to keep it here.</div>';
+        renderFavBody = () => {};
+      } else {
+        renderFavBody = buildTable({
+          root, cols: LISTING_COLS, rows, sort: favSort, filters: favFilters,
+          focusable: true, rerender: renderFavorites,
+        });
+      }
+      renderListingMap('fav-map', favoriteListings());
+    }
+
     // ---------------------------------------------------------------- map
-    let map = null, markerLayer = null, mapBounds = null;
+    // The listings view and the favourites view draw the same kind of map, so
+    // one renderer serves both; each keeps its own instance, layer and bounds.
+    const mapStates = {};
     const markerByMls = new Map();
     function focusListing(mls) {
-      const mk = markerByMls.get(mls);
-      if (!mk || !map) return;
-      $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      map.once('moveend', () => mk.openPopup());
-      map.flyTo(mk.getLatLng(), Math.max(map.getZoom(), 14), { duration: 0.8 });
+      const entry = mapStates[state.view === 'favorites' ? 'fav-map' : 'map'];
+      const mk = entry && entry.markers.get(mls);
+      if (!mk) return;
+      $('#' + entry.id).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      entry.map.once('moveend', () => mk.openPopup());
+      entry.map.flyTo(mk.getLatLng(), Math.max(entry.map.getZoom(), 14), { duration: 0.8 });
       // flyTo to the current view fires no moveend — make sure the popup still opens
       setTimeout(() => { if (!mk.isPopupOpen()) mk.openPopup(); }, 1200);
     }
@@ -2094,23 +2249,34 @@
       while (i < qs.length && price > qs[i]) i++;
       return css(seq[Math.min(i, seq.length - 1)]);
     }
-    function renderMap() {
+    function renderListingMap(id, listings) {
       if (typeof L === 'undefined') {
-        $('#map').style.display = 'none';
-        $('#map-fallback').style.display = 'block';
+        $('#' + id).style.display = 'none';
+        $('#' + id + '-fallback').style.display = 'block';
         return;
       }
-      const pts = active().filter((l) => l.lat && l.lng);
-      if (!map) {
-        map = L.map('map', { scrollWheelZoom: true, zoomControl: false });
+      const pts = listings.filter((l) => l.lat && l.lng);
+      let entry = mapStates[id];
+      if (!entry) {
+        const map = L.map(id, { scrollWheelZoom: true, zoomControl: false });
         map.on('dragstart', () => map.closePopup());
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 18, attribution: '&copy; OpenStreetMap contributors',
         }).addTo(map);
+        // the star lives inside popup HTML, so it can only be wired once shown
+        map.on('popupopen', (e) => {
+          const holder = e.popup.getElement && e.popup.getElement();
+          const slot = holder && holder.querySelector && holder.querySelector('.popup-star-slot');
+          const mls = slot && slot.dataset.mls;
+          if (!slot || !mls || slot.children.length) return;
+          slot.appendChild(starButton(mls, 'star star-float'));
+        });
+        entry = mapStates[id] = { id, map, layer: null, bounds: null, markers: new Map() };
       }
-      if (markerLayer) markerLayer.remove();
-      markerLayer = L.layerGroup().addTo(map);
-      markerByMls.clear();
+      if (entry.layer) entry.layer.remove();
+      entry.layer = L.layerGroup().addTo(entry.map);
+      entry.markers.clear();
+      if (id === 'map') markerByMls.clear();
       if (!pts.length) return;
       const LOT_BROWN = '#a15c1e';
       const housePrices = pts.filter((p) => p.type !== 'lot').map((p) => p.price).sort((a, b) => a - b);
@@ -2124,31 +2290,36 @@
           fillColor: l.type === 'lot' ? LOT_BROWN : quintileColor(l.price, qs), fillOpacity: 1,
         });
         const vsAssess = l.assess_total ? ` · ${Math.round((l.price / l.assess_total) * 100)}% of assess.` : '';
-        const facts = listingFacts(l);
         mk.bindPopup(
+          `<span class="popup-star-slot" data-mls="${l.mls}"></span>` +
           (l.photo_url ? `<img src="${l.photo_url}" class="popup-photo" alt="">` : '') +
           `<b>${fmtMoney(l.price)}</b>${vsAssess}<br>` +
           `${l.address.replace(/[<>&]/g, '')}, ${l.city.replace(/[<>&]/g, '')}<br>` +
-          facts + `<br>` +
+          listingFacts(l) + `<br>` +
           `<a href="${l.url}" target="_blank" rel="noopener">${sourceLabel(l.source)} ↗</a>`,
           // sized for phones: never wider than the map, popup stays fully in view
           { maxWidth: Math.min(240, innerWidth - 90), keepInView: true, autoPanPadding: L.point(24, 24) }
         );
         mk.on('click', () => markSeen(l.mls));
-        mk.addTo(markerLayer);
-        markerByMls.set(l.mls, mk);
+        mk.addTo(entry.layer);
+        entry.markers.set(l.mls, mk);
+        if (id === 'map') markerByMls.set(l.mls, mk);
       }
-      mapBounds = L.latLngBounds(pts.map((p) => [p.lat, p.lng])).pad(0.15);
-      map.fitBounds(mapBounds);
+      entry.bounds = L.latLngBounds(pts.map((p) => [p.lat, p.lng])).pad(0.15);
+      entry.map.fitBounds(entry.bounds);
       // the container's final width isn't known at first render — refit after layout
-      setTimeout(revealMap, 50);
+      setTimeout(() => revealMap(id), 50);
     }
-    // Leaflet measures its container on creation, so a map drawn while the
-    // listings view was hidden has no usable size until the view comes back.
-    function revealMap() {
-      if (!map || !mapBounds) return;
-      map.invalidateSize();
-      map.fitBounds(mapBounds);
+    function renderMap() {
+      renderListingMap('map', active());
+    }
+    // Leaflet measures its container on creation, so a map drawn while its view
+    // was hidden has no usable size until that view comes back.
+    function revealMap(id) {
+      const entry = mapStates[id];
+      if (!entry || !entry.bounds) return;
+      entry.map.invalidateSize();
+      entry.map.fitBounds(entry.bounds);
     }
 
     // ---------------------------------------------------------------- new listings
@@ -2196,6 +2367,7 @@
         img.loading = 'lazy';
         card.appendChild(img);
       }
+      card.appendChild(starButton(l.mls, 'star star-float'));
       const body = document.createElement('div');
       body.className = 'newcard-body';
       const price = document.createElement('div');
@@ -2272,6 +2444,7 @@
         return card;
       });
       newIndex = -1;
+      box.scrollLeft = 0; // always open at the first card, never mid-queue
       $('#new-modal').hidden = false;
       buildNewMap();
       selectNewIndex(0);
@@ -2311,6 +2484,7 @@
       renderTable();
       renderGone();
       renderMap();
+      if (state.view === 'favorites') renderFavorites();
       syncNewButton();
     }
     buildFilterPopup('changes-fpop', CHANGE_COLS, changeFilters, () => renderChangeBody(),
@@ -2319,6 +2493,8 @@
       ['price', 'bedrooms', 'address', 'lot_size']);
     buildFilterPopup('gone-fpop', GONE_COLS, goneFilters, () => renderGoneBody(),
       ['price', 'address']);
+    buildFilterPopup('fav-fpop', LISTING_COLS, favFilters, () => renderFavBody(),
+      ['price', 'bedrooms', 'address', 'lot_size']);
     showView(state.view);
     syncFilterIndicator();
     renderAll();
