@@ -96,39 +96,31 @@
       padding: 24px 28px calc(96px + env(safe-area-inset-bottom, 0px));
     }
 
-    .titlebar {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .refresh {
+    .iconbtn {
       flex: none;
-      font: inherit;
-      font-size: 13px;
-      padding: 8px 14px;
-      border-radius: 8px;
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
       border: 1px solid var(--border);
       background: var(--surface-1);
       color: var(--text-secondary);
       cursor: pointer;
     }
 
-    .refresh:active {
+    .iconbtn:active {
       background: var(--page);
     }
 
-    header h1 {
-      font-size: 20px;
-      font-weight: 650;
-      margin: 0;
+    @keyframes iconspin {
+      to {
+        transform: rotate(360deg);
+      }
     }
 
-    header .sub {
-      color: var(--text-muted);
-      font-size: 12.5px;
-      margin-top: 2px;
+    .iconbtn.spinning svg {
+      animation: iconspin 0.9s linear infinite;
     }
 
     .stale {
@@ -167,6 +159,12 @@
     }
 
     /* the dock is anchored to the bottom, so growing the panel lifts the bar */
+    .dock-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
     .dock-panel {
       max-height: 0;
       overflow: hidden;
@@ -228,19 +226,6 @@
     .viewset button[aria-pressed="true"] {
       background: var(--series-1);
       color: #fff;
-    }
-
-    .cog {
-      flex: none;
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: var(--surface-1);
-      color: var(--text-secondary);
-      cursor: pointer;
     }
 
     .cog[aria-expanded="true"] {
@@ -790,16 +775,7 @@
 
 <body>
   <div class="wrap">
-    <header>
-      <div class="titlebar">
-        <div>
-          <h1>Housing tracker</h1>
-          <div class="sub" id="subtitle"></div>
-        </div>
-        <button type="button" id="refresh" class="refresh" title="Fetch the latest published data" hidden>Refresh</button>
-      </div>
-      <div class="stale" id="stale" hidden></div>
-    </header>
+    <div class="stale" id="stale" hidden></div>
 
     <section id="view-listings">
       <div class="grid">
@@ -880,11 +856,21 @@
   <div class="dock-backdrop" id="dock-backdrop"></div>
   <div class="dock" id="dock">
     <div class="dock-bar">
-      <div class="viewset" id="viewset" role="group" aria-label="View">
-        <button type="button" data-view="listings" aria-pressed="true">Listings</button>
-        <button type="button" data-view="stats" aria-pressed="false">Statistics</button>
+      <div class="dock-left">
+        <button type="button" id="refresh" class="iconbtn" aria-label="Fetch the latest published data"
+          title="Fetch the latest published data" hidden>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg>
+        </button>
+        <div class="viewset" id="viewset" role="group" aria-label="View">
+          <button type="button" data-view="listings" aria-pressed="true">Listings</button>
+          <button type="button" data-view="stats" aria-pressed="false">Statistics</button>
+        </div>
       </div>
-      <button type="button" id="settings-cog" class="cog" aria-label="Filters" aria-expanded="false"
+      <button type="button" id="settings-cog" class="iconbtn cog" aria-label="Filters" aria-expanded="false"
         aria-controls="dock-panel">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1059,11 +1045,8 @@
       { kind: 'renumbered', label: 'New MLS №', color: 'var(--series-5)' },
     ];
 
-    // ---------------------------------------------------------------- header
+    // ---------------------------------------------------------------- stale banner and refresh
     {
-      const d = new Date(DATA.generatedAt);
-      $('#subtitle').textContent =
-        `Generated ${d.toLocaleString('en-CA')} · ${DATA.listings.length} listings tracked · searches: ${DATA.searches.join(', ')}`;
       if (DATA.staleWarning) {
         const s = $('#stale');
         s.hidden = false;
@@ -1077,7 +1060,7 @@
       refreshButton.hidden = !(launchedFromHomeScreen && hasTouchScreen);
       refreshButton.addEventListener('click', () => {
         refreshButton.disabled = true;
-        refreshButton.textContent = 'Refreshing…';
+        refreshButton.classList.add('spinning');
         const cacheBustedUrl = location.pathname + '?fetched=' + Date.now();
         location.replace(cacheBustedUrl);
       });
