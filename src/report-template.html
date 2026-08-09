@@ -732,8 +732,13 @@
         <div id="map-fallback">Map tiles need an internet connection.</div>
       </div>
       <div class="card full">
-        <h2>Price changes</h2>
-        <p class="desc">Corrections in the selected range</p>
+        <div class="card-top">
+          <div>
+            <h2>Price changes</h2>
+            <p class="desc">Corrections in the selected range</p>
+          </div>
+          <div class="fpop-wrap" id="changes-fpop"></div>
+        </div>
         <div class="table-scroll" id="price-changes"></div>
       </div>
       <div class="card full">
@@ -1268,42 +1273,144 @@
       }
     }
 
+    // ---------------------------------------------------------------- table columns
+    // Every table shares one listing column set in one order; a table's own
+    // columns are appended after it.
+    const DASH = '—';
+    const latestRelistAt = new Map();
+    for (const e of DATA.events) {
+      if ((e.kind === 'relisted' || e.kind === 'renumbered') && !latestRelistAt.has(e.mls)) {
+        latestRelistAt.set(e.mls, e.at);
+      }
+    }
+    const listingRow = (l) => ({
+      ...l,
+      type: typeLabel(l.type),
+      tracked: daysTracked(l),
+      first_seen: l.first_seen.slice(0, 10),
+      relisted: latestRelistAt.get(l.mls)?.slice(0, 10) ?? null,
+      vs_assess: l.assess_total ? Math.round((l.price / l.assess_total) * 100) : null,
+    });
+    const LISTING_COLS = [
+      { key: 'first_seen', label: 'Date added', desc: true, nowrap: true },
+      { key: 'address', label: 'Address' },
+      { key: 'city', label: 'Area' },
+      { key: 'type', label: 'Type' },
+      { key: 'price', label: 'Price', num: true, fmt: (r) => fmtMoney(r.price) },
+      { key: 'assess_lot', label: 'Eval. lot', num: true, fmt: (r) => r.assess_lot ? fmtMoney(r.assess_lot) : DASH },
+      { key: 'assess_building', label: 'Eval. home', num: true, fmt: (r) => r.assess_building ? fmtMoney(r.assess_building) : DASH },
+      { key: 'assess_total', label: 'Eval. total', num: true, fmt: (r) => r.assess_total ? fmtMoney(r.assess_total) : DASH },
+      { key: 'vs_assess', label: 'vs assess', num: true, fmt: (r) => r.vs_assess ? r.vs_assess + '%' : DASH },
+      { key: 'rooms', label: 'Rooms', num: true },
+      { key: 'bedrooms', label: 'Beds', num: true, fmt: (r) => r.bedrooms || DASH },
+      { key: 'bathrooms', label: 'Baths', num: true, fmt: (r) => r.bathrooms || DASH },
+      { key: 'year_built', label: 'Year', num: true },
+      { key: 'lot_size', label: 'Land (pc)', num: true, fmt: (r) => r.lot_size ? r.lot_size.toLocaleString('en-CA') : DASH },
+      { key: 'parking_count', label: 'Park', num: true },
+      { key: 'tracked', label: 'Days', num: true },
+      { key: 'relisted', label: 'Relisted', desc: true, nowrap: true },
+    ];
+    const CHANGE_COLS = [...LISTING_COLS,
+      { key: 'changed', label: 'Changed', desc: true, nowrap: true },
+      { key: 'old_price', label: 'Before', num: true, fmt: (r) => fmtMoney(r.old_price) },
+      { key: 'new_price', label: 'After', num: true, fmt: (r) => fmtMoney(r.new_price) },
+      { key: 'delta', label: 'Δ', num: true, fmt: (r) => (r.delta > 0 ? '+' : '') + r.delta.toFixed(1) + '%' },
+    ];
+    const GONE_COLS = [...LISTING_COLS,
+      { key: 'gone', label: 'Delisted', desc: true, nowrap: true },
+      { key: 'onMarket', label: 'On market (days)', num: true },
+    ];
+
+    function tableRow(r, cols, focusable) {
+      const tr = document.createElement('tr');
+      if (focusable && r.lat && r.lng) {
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', (e) => {
+          if (e.target.closest('a')) return; // the Centris link keeps its own behavior
+          focusListing(r.mls);
+        });
+      }
+      for (const c of cols) {
+        if (c.key === 'address') {
+          tr.appendChild(addressCell(r));
+          continue;
+        }
+        const td = document.createElement('td');
+        if (c.num) td.classList.add('num');
+        if (c.nowrap) td.classList.add('nowrap');
+        if (c.key === 'vs_assess' && r.vs_assess != null && r.vs_assess < 100) td.classList.add('down');
+        if (c.key === 'delta') td.classList.add(r.delta > 0 ? 'up' : 'down');
+        td.textContent = c.fmt ? c.fmt(r) : (r[c.key] ?? DASH);
+        tr.appendChild(td);
+      }
+      const tdl = document.createElement('td');
+      tdl.className = 'eye-cell';
+      tdl.appendChild(centrisEyeLink(r.url));
+      tr.appendChild(tdl);
+      return tr;
+    }
+    // Returns the body renderer so a filter change can redraw rows without
+    // rebuilding the header.
+    function buildTable({ root, cols, rows, sort, filters, focusable, rerender }) {
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const trh = document.createElement('tr');
+      for (const c of cols) {
+        const th = document.createElement('th');
+        th.className = 'sortable' + (c.num ? ' num' : '') + (c.nowrap ? ' nowrap' : '');
+        th.textContent = c.label + (sort.key === c.key ? (sort.dir < 0 ? ' ↓' : ' ↑') : '');
+        th.addEventListener('click', () => {
+          sort.dir = sort.key === c.key ? -sort.dir : (c.num || c.desc ? -1 : 1);
+          sort.key = c.key;
+          rerender();
+        });
+        trh.appendChild(th);
+      }
+      trh.appendChild(document.createElement('th'));
+      thead.appendChild(trh);
+      const tb = document.createElement('tbody');
+      const renderBody = () => {
+        tb.textContent = '';
+        const shown = applyColFilters(rows, cols, filters).sort((a, b) => {
+          const va = a[sort.key], vb = b[sort.key];
+          if (va == null) return 1;
+          if (vb == null) return -1;
+          return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * sort.dir;
+        });
+        for (const r of shown) tb.appendChild(tableRow(r, cols, focusable));
+      };
+      table.append(thead, tb);
+      renderBody();
+      root.appendChild(table);
+      return renderBody;
+    }
+
     // ---------------------------------------------------------------- price changes table
+    const changeSort = { key: 'changed', dir: -1 };
+    const changeFilters = {};
+    let renderChangeBody = () => {};
     function renderPriceChanges() {
       const root = $('#price-changes');
       root.textContent = '';
       const byMls = new Map(DATA.listings.map((l) => [l.mls, l]));
-      const rows = eventsInRange().filter((e) => e.kind === 'price_change');
+      const rows = eventsInRange()
+        .filter((e) => e.kind === 'price_change' && byMls.has(e.mls))
+        .map((e) => ({
+          ...listingRow(byMls.get(e.mls)),
+          changed: e.at.slice(0, 10),
+          old_price: e.old_price,
+          new_price: e.price,
+          delta: ((e.price - e.old_price) / e.old_price) * 100,
+        }));
       if (!rows.length) {
         root.innerHTML = '<div class="empty">No price changes recorded in this range yet — they appear here as daily crawls accumulate.</div>';
+        renderChangeBody = () => {};
         return;
       }
-      const table = document.createElement('table');
-      table.innerHTML = '<thead><tr><th>Date</th><th>Address</th><th>Area</th><th class="num">Before</th><th class="num">After</th><th class="num">Δ</th></tr></thead>';
-      const tb = document.createElement('tbody');
-      for (const e of rows) {
-        const l = byMls.get(e.mls);
-        const tr = document.createElement('tr');
-        const pct = ((e.price - e.old_price) / e.old_price) * 100;
-        const cells = [
-          e.at.slice(0, 10),
-          l ? l.address : e.mls,
-          l ? l.city : '',
-          fmtMoney(e.old_price),
-          fmtMoney(e.price),
-          (pct > 0 ? '+' : '') + pct.toFixed(1) + '%',
-        ];
-        cells.forEach((c, i) => {
-          const td = document.createElement('td');
-          if (i >= 3) td.className = 'num';
-          if (i === 5) td.classList.add(pct > 0 ? 'up' : 'down');
-          td.textContent = c;
-          tr.appendChild(td);
-        });
-        tb.appendChild(tr);
-      }
-      table.appendChild(tb);
-      root.appendChild(table);
+      renderChangeBody = buildTable({
+        root, cols: CHANGE_COLS, rows, sort: changeSort, filters: changeFilters,
+        rerender: renderPriceChanges,
+      });
     }
 
     // ---------------------------------------------------------------- column filters
@@ -1450,131 +1557,19 @@
     // ---------------------------------------------------------------- listings table
     const sort = { key: 'first_seen', dir: -1 };
     const listingFilters = {};
-    const LISTING_COLS = [
-      { key: 'first_seen', label: 'Date added', desc: true, nowrap: true },
-      { key: 'address', label: 'Address' },
-      { key: 'city', label: 'Area' },
-      { key: 'type', label: 'Type' },
-      { key: 'price', label: 'Price', num: true },
-      { key: 'assess_lot', label: 'Eval. lot', num: true },
-      { key: 'assess_building', label: 'Eval. home', num: true },
-      { key: 'assess_total', label: 'Eval. total', num: true },
-      { key: 'vs_assess', label: 'vs assess', num: true },
-      { key: 'rooms', label: 'Rooms', num: true },
-      { key: 'bedrooms', label: 'Beds', num: true },
-      { key: 'bathrooms', label: 'Baths', num: true },
-      { key: 'year_built', label: 'Year', num: true },
-      { key: 'lot_size', label: 'Land (pc)', num: true },
-      { key: 'parking_count', label: 'Park', num: true },
-      { key: 'tracked', label: 'Days', num: true },
-      { key: 'relisted', label: 'Relisted', desc: true },
-    ];
-    const latestRelistAt = new Map();
-    for (const e of DATA.events) {
-      if ((e.kind === 'relisted' || e.kind === 'renumbered') && !latestRelistAt.has(e.mls)) {
-        latestRelistAt.set(e.mls, e.at);
-      }
-    }
     let renderListingBody = () => {};
     function renderTable() {
       const root = $('#listings-table');
       root.textContent = '';
-      const baseRows = active().map((l) => ({
-        ...l,
-        type: typeLabel(l.type),
-        tracked: daysTracked(l),
-        first_seen: l.first_seen.slice(0, 10),
-        relisted: latestRelistAt.get(l.mls)?.slice(0, 10) ?? null,
-        vs_assess: l.assess_total ? Math.round((l.price / l.assess_total) * 100) : null,
-      }));
-      const cols = LISTING_COLS;
-      const table = document.createElement('table');
-      const thead = document.createElement('thead');
-      const trh = document.createElement('tr');
-      for (const c of cols) {
-        const th = document.createElement('th');
-        th.className = 'sortable' + (c.num ? ' num' : '') + (c.nowrap ? ' nowrap' : '');
-        th.textContent = c.label + (sort.key === c.key ? (sort.dir < 0 ? ' ↓' : ' ↑') : '');
-        th.addEventListener('click', () => {
-          sort.dir = sort.key === c.key ? -sort.dir : (c.num || c.desc ? -1 : 1);
-          sort.key = c.key;
-          renderTable();
-        });
-        trh.appendChild(th);
-      }
-      trh.appendChild(document.createElement('th'));
-      thead.appendChild(trh);
-      const tb = document.createElement('tbody');
-      const renderBody = () => {
-        tb.textContent = '';
-        const rows = applyColFilters(baseRows, cols, listingFilters).sort((a, b) => {
-          const va = a[sort.key], vb = b[sort.key];
-          if (va == null) return 1;
-          if (vb == null) return -1;
-          return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * sort.dir;
-        });
-        for (const l of rows) {
-          const tr = document.createElement('tr');
-          if (l.lat && l.lng) {
-            tr.style.cursor = 'pointer';
-            tr.addEventListener('click', (e) => {
-              if (e.target.closest('a')) return; // the Centris link keeps its own behavior
-              focusListing(l.mls);
-            });
-          }
-          const tdAdded = document.createElement('td');
-          tdAdded.className = 'nowrap';
-          tdAdded.textContent = l.first_seen;
-          tr.appendChild(tdAdded);
-          tr.appendChild(addressCell(l));
-          const vals = [
-            l.city, l.type, fmtMoney(l.price),
-            l.assess_lot ? fmtMoney(l.assess_lot) : '—',
-            l.assess_building ? fmtMoney(l.assess_building) : '—',
-            l.assess_total ? fmtMoney(l.assess_total) : '—',
-            l.vs_assess ? l.vs_assess + '%' : '—',
-            l.rooms ?? '—', l.bedrooms || '—', l.bathrooms || '—',
-            l.year_built ?? '—',
-            l.lot_size ? l.lot_size.toLocaleString('en-CA') : '—',
-            l.parking_count ?? '—',
-            String(l.tracked),
-            l.relisted ?? '—',
-          ];
-          vals.forEach((v, i) => {
-            const td = document.createElement('td');
-            if (cols[i + 2] && cols[i + 2].num) td.className = 'num';
-            if (cols[i + 2] && cols[i + 2].key === 'vs_assess' && l.vs_assess != null && l.vs_assess < 100) td.classList.add('down');
-            td.textContent = v;
-            tr.appendChild(td);
-          });
-          const tdl = document.createElement('td');
-          tdl.className = 'eye-cell';
-          tdl.appendChild(centrisEyeLink(l.url));
-          tr.appendChild(tdl);
-          tb.appendChild(tr);
-        }
-      };
-      table.appendChild(thead);
-      table.appendChild(tb);
-      renderListingBody = renderBody;
-      renderBody();
-      root.appendChild(table);
+      renderListingBody = buildTable({
+        root, cols: LISTING_COLS, rows: active().map(listingRow),
+        sort, filters: listingFilters, focusable: true, rerender: renderTable,
+      });
     }
 
     // ---------------------------------------------------------------- sold / delisted table
+    const goneSort = { key: 'gone', dir: -1 };
     const goneFilters = {};
-    const GONE_COLS = [
-      { key: 'gone', label: 'Delisted', nowrap: true },
-      { key: 'first_seen', label: 'Date added', nowrap: true },
-      { key: 'address', label: 'Address' },
-      { key: 'city', label: 'Area' },
-      { key: 'type', label: 'Type' },
-      { key: 'price', label: 'Last price', num: true },
-      { key: 'assess_lot', label: 'Eval. lot', num: true },
-      { key: 'assess_building', label: 'Eval. home', num: true },
-      { key: 'assess_total', label: 'Eval. total', num: true },
-      { key: 'onMarket', label: 'On market (days)', num: true },
-    ];
     let renderGoneBody = () => {};
     function renderGone() {
       const root = $('#gone-table');
@@ -1584,69 +1579,24 @@
       for (const e of DATA.events) {
         if (e.kind === 'delisted' && !delistedAt.has(e.mls)) delistedAt.set(e.mls, e.at);
       }
-      const baseRows = DATA.listings
+      const rows = DATA.listings
         .filter((l) => l.status === 'delisted' && inScope(l))
         .map((l) => {
           const gone = delistedAt.get(l.mls) ?? l.last_seen;
-          const onMarket = Math.max(0, Math.round((new Date(gone) - new Date(l.first_seen)) / DAY));
-          return { ...l, type: typeLabel(l.type), first_seen: l.first_seen.slice(0, 10), gone: gone.slice(0, 10), onMarket };
-        })
-        .sort((a, b) => b.gone.localeCompare(a.gone));
-      if (!baseRows.length) {
+          return {
+            ...listingRow(l),
+            gone: gone.slice(0, 10),
+            onMarket: Math.max(0, Math.round((new Date(gone) - new Date(l.first_seen)) / DAY)),
+          };
+        });
+      if (!rows.length) {
         root.innerHTML = '<div class="empty">Nothing has left the market in this slice yet.</div>';
         renderGoneBody = () => {};
         return;
       }
-      const cols = GONE_COLS;
-      const table = document.createElement('table');
-      const thead = document.createElement('thead');
-      const trh = document.createElement('tr');
-      for (const c of cols) {
-        const th = document.createElement('th');
-        th.className = (c.num ? 'num' : '') + (c.nowrap ? ' nowrap' : '');
-        th.textContent = c.label;
-        trh.appendChild(th);
-      }
-      trh.appendChild(document.createElement('th'));
-      thead.appendChild(trh);
-      const tb = document.createElement('tbody');
-      const renderBody = () => {
-        tb.textContent = '';
-        for (const l of applyColFilters(baseRows, cols, goneFilters)) {
-          const tr = document.createElement('tr');
-          const tdDate = document.createElement('td');
-          tdDate.className = 'nowrap';
-          tdDate.textContent = l.gone;
-          tr.appendChild(tdDate);
-          const tdAdded = document.createElement('td');
-          tdAdded.className = 'nowrap';
-          tdAdded.textContent = l.first_seen;
-          tr.appendChild(tdAdded);
-          tr.appendChild(addressCell(l));
-          const vals = [
-            l.city, l.type, fmtMoney(l.price),
-            l.assess_lot ? fmtMoney(l.assess_lot) : '—',
-            l.assess_building ? fmtMoney(l.assess_building) : '—',
-            l.assess_total ? fmtMoney(l.assess_total) : '—', String(l.onMarket),
-          ];
-          vals.forEach((v, i) => {
-            const td = document.createElement('td');
-            if (cols[i + 3] && cols[i + 3].num) td.className = 'num';
-            td.textContent = v;
-            tr.appendChild(td);
-          });
-          const tdl = document.createElement('td');
-          tdl.className = 'eye-cell';
-          tdl.appendChild(centrisEyeLink(l.url));
-          tr.appendChild(tdl);
-          tb.appendChild(tr);
-        }
-      };
-      table.appendChild(thead);
-      table.appendChild(tb);
-      renderGoneBody = renderBody;
-      renderBody();
-      root.appendChild(table);
+      renderGoneBody = buildTable({
+        root, cols: GONE_COLS, rows, sort: goneSort, filters: goneFilters, rerender: renderGone,
+      });
     }
 
     // ---------------------------------------------------------------- map
@@ -1731,6 +1681,8 @@
       renderGone();
       renderMap();
     }
+    buildFilterPopup('changes-fpop', CHANGE_COLS, changeFilters, () => renderChangeBody(),
+      ['price', 'address', 'delta']);
     buildFilterPopup('listings-fpop', LISTING_COLS, listingFilters, () => renderListingBody(),
       ['price', 'bedrooms', 'address', 'lot_size']);
     buildFilterPopup('gone-fpop', GONE_COLS, goneFilters, () => renderGoneBody(),
