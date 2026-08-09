@@ -93,7 +93,7 @@
     .wrap {
       max-width: 1880px;
       margin: 0 auto;
-      padding: 24px 28px 64px;
+      padding: 24px 28px calc(96px + env(safe-area-inset-bottom, 0px));
     }
 
     .titlebar {
@@ -144,21 +144,144 @@
       color: var(--delta-bad);
     }
 
-    .filters {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-      margin: 20px 0 16px;
+    .dock {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 80;
+      background: var(--surface-1);
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.14);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
-    .filters select {
-      font: inherit;
-      color: var(--text-primary);
-      background: var(--surface-1);
+    .dock-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      max-width: 1880px;
+      margin: 0 auto;
+      padding: 10px 16px;
+    }
+
+    /* the dock is anchored to the bottom, so growing the panel lifts the bar */
+    .dock-panel {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.26s ease;
+    }
+
+    .dock.open .dock-panel {
+      max-height: 70vh;
+      overflow: auto;
+    }
+
+    .dock-panel-inner {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-width: 1880px;
+      margin: 0 auto;
+      padding: 14px 16px 18px;
+      border-top: 1px solid var(--grid);
+    }
+
+    .dock-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 70;
+      background: rgba(0, 0, 0, 0.28);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.26s ease, visibility 0.26s ease;
+    }
+
+    .dock-backdrop.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .viewset {
+      display: inline-flex;
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 6px 10px;
+      overflow: hidden;
+    }
+
+    .viewset button {
+      font: inherit;
+      font-size: 13px;
+      font-weight: 550;
+      padding: 10px 20px;
+      border: 0;
+      cursor: pointer;
+      background: var(--surface-1);
+      color: var(--text-secondary);
+    }
+
+    .viewset button+button {
+      border-left: 1px solid var(--border);
+    }
+
+    .viewset button[aria-pressed="true"] {
+      background: var(--series-1);
+      color: #fff;
+    }
+
+    .cog {
+      flex: none;
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-1);
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    .cog[aria-expanded="true"] {
+      background: var(--series-1);
+      border-color: transparent;
+      color: #fff;
+    }
+
+    .dock-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .dock-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .dock select {
+      font: inherit;
+      color: var(--text-primary);
+      background: var(--page);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 10px;
+      width: 100%;
+    }
+
+    .dock .rangeset button {
+      flex: 1;
+      padding: 9px 8px;
+    }
+
+    .dock .hint {
+      color: var(--text-muted);
+      font-size: 12px;
+      margin: 0;
     }
 
     .rangeset {
@@ -185,11 +308,6 @@
     .rangeset button[aria-pressed="true"] {
       background: var(--series-1);
       color: #fff;
-    }
-
-    .filters .hint {
-      color: var(--text-muted);
-      font-size: 12px;
     }
 
     .tiles {
@@ -680,56 +798,13 @@
       <div class="stale" id="stale" hidden></div>
     </header>
 
-    <div class="filters">
-      <div class="rangeset" id="rangeset" role="group" aria-label="Event date range">
-        <button data-days="7">7 days</button>
-        <button data-days="30" aria-pressed="true">30 days</button>
-        <button data-days="90">90 days</button>
-        <button data-days="0">All</button>
-      </div>
-      <select id="area-filter" aria-label="Area"></select>
-      <select id="type-filter" aria-label="Type">
-        <option value="all">All types</option>
-        <option value="house">Houses</option>
-        <option value="lot">Lots</option>
-      </select>
-      <span class="hint">Range scopes activity (new / changes / delisted); area and type scope everything.</span>
-    </div>
-
-    <div class="tiles" id="tiles"></div>
-
-    <div class="grid">
-      <div class="card">
-        <h2>Asking-price distribution</h2>
-        <p class="desc">Active listings by price bin</p>
-        <div id="chart-hist"></div>
-      </div>
-      <div class="card">
-        <h2>Active listings by area</h2>
-        <p class="desc">Current inventory per area</p>
-        <div id="chart-areas"></div>
-      </div>
-      <div class="card full">
-        <h2>Asking price vs. municipal evaluation</h2>
-        <p class="desc">Active listings binned by asking price as a share of the municipal eval — 100% means priced at
-          eval. Evals lag the market; lots are assessed far below asking.</p>
-        <div class="evalwrap">
-          <div id="chart-vs-eval"></div>
-          <div class="statrail" id="vs-eval-rail"></div>
-        </div>
-        <div class="legend" id="vs-eval-legend"></div>
-      </div>
-      <div class="card full">
-        <h2>Activity over time</h2>
-        <p class="desc">Events per day in the selected range</p>
-        <div id="chart-events"></div>
-        <div class="legend" id="events-legend"></div>
-      </div>
-      <div class="card full">
-        <h2>Map</h2>
-        <p class="desc">Houses in blue (darker = higher asking price, quintiles) · lots in brown</p>
-        <div id="map"></div>
-        <div id="map-fallback">Map tiles need an internet connection.</div>
+    <section id="view-listings">
+      <div class="grid">
+        <div class="card full">
+          <h2>Map</h2>
+          <p class="desc">Houses in blue (darker = higher asking price, quintiles) · lots in brown</p>
+          <div id="map"></div>
+          <div id="map-fallback">Map tiles need an internet connection.</div>
       </div>
       <div class="card full">
         <div class="card-top">
@@ -762,6 +837,83 @@
           <div class="fpop-wrap" id="gone-fpop"></div>
         </div>
         <div class="table-scroll" id="gone-table"></div>
+      </div>
+      </div>
+    </section>
+
+    <section id="view-stats" hidden>
+      <div class="tiles" id="tiles"></div>
+      <div class="grid">
+        <div class="card">
+          <h2>Asking-price distribution</h2>
+          <p class="desc">Active listings by price bin</p>
+          <div id="chart-hist"></div>
+      </div>
+      <div class="card">
+        <h2>Active listings by area</h2>
+        <p class="desc">Current inventory per area</p>
+        <div id="chart-areas"></div>
+      </div>
+      <div class="card full">
+        <h2>Asking price vs. municipal evaluation</h2>
+        <p class="desc">Active listings binned by asking price as a share of the municipal eval — 100% means priced at
+          eval. Evals lag the market; lots are assessed far below asking.</p>
+        <div class="evalwrap">
+          <div id="chart-vs-eval"></div>
+          <div class="statrail" id="vs-eval-rail"></div>
+        </div>
+        <div class="legend" id="vs-eval-legend"></div>
+      </div>
+      <div class="card full">
+        <h2>Activity over time</h2>
+        <p class="desc">Events per day in the selected range</p>
+        <div id="chart-events"></div>
+        <div class="legend" id="events-legend"></div>
+      </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="dock-backdrop" id="dock-backdrop"></div>
+  <div class="dock" id="dock">
+    <div class="dock-bar">
+      <div class="viewset" id="viewset" role="group" aria-label="View">
+        <button type="button" data-view="listings" aria-pressed="true">Listings</button>
+        <button type="button" data-view="stats" aria-pressed="false">Statistics</button>
+      </div>
+      <button type="button" id="settings-cog" class="cog" aria-label="Filters" aria-expanded="false"
+        aria-controls="dock-panel">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.9 15.5a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1z" />
+        </svg>
+      </button>
+    </div>
+    <div class="dock-panel" id="dock-panel">
+      <div class="dock-panel-inner">
+        <div class="dock-row">
+          <span class="dock-label">Date range</span>
+          <div class="rangeset" id="rangeset" role="group" aria-label="Event date range">
+            <button type="button" data-days="7">7 days</button>
+            <button type="button" data-days="30" aria-pressed="true">30 days</button>
+            <button type="button" data-days="90">90 days</button>
+            <button type="button" data-days="0">All</button>
+          </div>
+        </div>
+        <div class="dock-row">
+          <label class="dock-label" for="area-filter">Area</label>
+          <select id="area-filter"></select>
+        </div>
+        <div class="dock-row">
+          <label class="dock-label" for="type-filter">Type</label>
+          <select id="type-filter">
+            <option value="all">All types</option>
+            <option value="house">Houses</option>
+            <option value="lot">Lots</option>
+          </select>
+        </div>
+        <p class="hint">Range scopes activity (new / changes / delisted); area and type scope everything.</p>
       </div>
     </div>
   </div>
@@ -931,6 +1083,35 @@
         for (const x of $('#rangeset').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
         renderAll();
       });
+    }
+
+    // ---------------------------------------------------------------- views
+    const VIEWS = { listings: '#view-listings', stats: '#view-stats' };
+    function showView(name) {
+      for (const [key, sel] of Object.entries(VIEWS)) $(sel).hidden = key !== name;
+      for (const b of $('#viewset').querySelectorAll('button')) {
+        b.setAttribute('aria-pressed', String(b.dataset.view === name));
+      }
+      if (name === 'listings') revealMap();
+    }
+    $('#viewset').addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (b) showView(b.dataset.view);
+    });
+
+    // ---------------------------------------------------------------- filter dock
+    {
+      const dock = $('#dock');
+      const backdrop = $('#dock-backdrop');
+      const cog = $('#settings-cog');
+      const setOpen = (open) => {
+        dock.classList.toggle('open', open);
+        backdrop.classList.toggle('open', open);
+        cog.setAttribute('aria-expanded', String(open));
+      };
+      cog.addEventListener('click', () => setOpen(!dock.classList.contains('open')));
+      backdrop.addEventListener('click', () => setOpen(false));
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setOpen(false); });
     }
 
     // ---------------------------------------------------------------- tiles
@@ -1600,7 +1781,7 @@
     }
 
     // ---------------------------------------------------------------- map
-    let map = null, markerLayer = null;
+    let map = null, markerLayer = null, mapBounds = null;
     const markerByMls = new Map();
     function focusListing(mls) {
       const mk = markerByMls.get(mls);
@@ -1663,10 +1844,17 @@
         mk.addTo(markerLayer);
         markerByMls.set(l.mls, mk);
       }
-      const bounds = L.latLngBounds(pts.map((p) => [p.lat, p.lng])).pad(0.15);
-      map.fitBounds(bounds);
+      mapBounds = L.latLngBounds(pts.map((p) => [p.lat, p.lng])).pad(0.15);
+      map.fitBounds(mapBounds);
       // the container's final width isn't known at first render — refit after layout
-      setTimeout(() => { map.invalidateSize(); map.fitBounds(bounds); }, 50);
+      setTimeout(revealMap, 50);
+    }
+    // Leaflet measures its container on creation, so a map drawn while the
+    // listings view was hidden has no usable size until the view comes back.
+    function revealMap() {
+      if (!map || !mapBounds) return;
+      map.invalidateSize();
+      map.fitBounds(mapBounds);
     }
 
     // ---------------------------------------------------------------- render
@@ -1687,6 +1875,7 @@
       ['price', 'bedrooms', 'address', 'lot_size']);
     buildFilterPopup('gone-fpop', GONE_COLS, goneFilters, () => renderGoneBody(),
       ['price', 'address']);
+    showView('listings');
     renderAll();
   </script>
 </body>
