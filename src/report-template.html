@@ -786,7 +786,6 @@
       width: 100%;
       max-height: 88px;
       object-fit: cover;
-      border-radius: 8px 8px 0 0;
     }
 
     .popup-body {
@@ -856,6 +855,11 @@
 
     .leaflet-popup-content-wrapper {
       position: relative;
+      /* Leaflet pads the wrapper by 1px, which draws a white ring around the
+         edge-to-edge photo; clip to the radius instead */
+      padding: 0;
+      overflow: hidden;
+      border-radius: 10px;
     }
 
     table {
@@ -2305,9 +2309,17 @@
       // Popups open upward, so the pin sits a fixed 25px off the bottom edge and
       // every pixel above it belongs to the popup. Horizontal centring is
       // untouched; only the vertical centre moves.
+      //
+      // The height has to be measured off the element. Leaflet caches its
+      // container size and only refreshes it on a window resize, but the sticky
+      // map is sized in vh and iOS changes the viewport as the browser chrome
+      // slides away without reliably firing one. A stale, smaller height yields
+      // a smaller lift, which is why the pin sometimes landed near the middle.
+      entry.map.invalidateSize({ pan: false });
+      const mapHeight = $('#' + entry.id).clientHeight || entry.map.getSize().y;
       const PIN_FROM_BOTTOM = 25;
       const markerPoint = entry.map.project(mk.getLatLng(), zoom);
-      const lift = L.point(0, entry.map.getSize().y / 2 - PIN_FROM_BOTTOM);
+      const lift = L.point(0, Math.max(0, mapHeight / 2 - PIN_FROM_BOTTOM));
       const center = entry.map.unproject(markerPoint.subtract(lift), zoom);
       entry.map.once('moveend', () => mk.openPopup());
       entry.map.flyTo(center, zoom, { duration: 0.8 });
@@ -2375,7 +2387,7 @@
           `<div class="popup-line"><a href="${l.url}" target="_blank" rel="noopener">${sourceLabel(l.source)} ↗</a></div>` +
           `</div>`,
           // sized for phones: never wider than the map, popup stays fully in view
-          { maxWidth: Math.min(240, innerWidth - 90), keepInView: true, autoPanPadding: L.point(24, 24) }
+          { maxWidth: Math.min(240, innerWidth - 90), keepInView: true, autoPanPadding: L.point(6, 6) }
         );
         mk.on('click', () => markSeen(l.mls));
         mk.addTo(entry.layer);
