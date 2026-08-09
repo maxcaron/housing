@@ -2280,8 +2280,15 @@
       const mk = entry && entry.markers.get(mls);
       if (!mk) return;
       $('#' + entry.id).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const zoom = Math.max(entry.map.getZoom(), 14);
+      // Popups open upward, so centring the marker leaves them only half the map
+      // to unfold into and tall ones get clipped. Put the marker a quarter up
+      // from the bottom instead, which means shifting the map centre above it.
+      const markerPoint = entry.map.project(mk.getLatLng(), zoom);
+      const lift = L.point(0, entry.map.getSize().y * 0.25);
+      const center = entry.map.unproject(markerPoint.subtract(lift), zoom);
       entry.map.once('moveend', () => mk.openPopup());
-      entry.map.flyTo(mk.getLatLng(), Math.max(entry.map.getZoom(), 14), { duration: 0.8 });
+      entry.map.flyTo(center, zoom, { duration: 0.8 });
       // flyTo to the current view fires no moveend — make sure the popup still opens
       setTimeout(() => { if (!mk.isPopupOpen()) mk.openPopup(); }, 1200);
     }
