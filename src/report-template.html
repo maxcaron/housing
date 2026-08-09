@@ -1535,7 +1535,8 @@
 
     function tableRow(r, cols, focusable) {
       const tr = document.createElement('tr');
-      if (focusable && r.lat && r.lng) {
+      // only active listings get markers, so only they have something to focus
+      if (focusable && r.status === 'active' && r.lat && r.lng) {
         tr.style.cursor = 'pointer';
         tr.addEventListener('click', (e) => {
           if (e.target.closest('a')) return; // the Centris link keeps its own behavior
@@ -1621,7 +1622,7 @@
       }
       renderChangeBody = buildTable({
         root, cols: CHANGE_COLS, rows, sort: changeSort, filters: changeFilters,
-        rerender: renderPriceChanges,
+        focusable: true, rerender: renderPriceChanges,
       });
     }
 
