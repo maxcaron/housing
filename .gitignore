@@ -3,3 +3,4 @@ data/*
 !data/housing.db
 logs/
 archive/
+.DS_Store
