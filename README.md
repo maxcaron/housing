@@ -32,23 +32,47 @@ crawl (add `&& node src/report-html.js` to the cron line).
 
 ## Daily automation & hosting
 
-`bin/daily.sh` runs the whole pipeline: crawl → regenerate dashboard → copy to
-`docs/index.html` → commit & push. GitHub Pages serves `docs/` on `main`, so the
-push is the deploy. The dashboard is regenerated and published **even when the
-crawl fails** — its stale-data banner reaching the hosted page is the alerting.
+`.github/workflows/daily.yml` runs the whole pipeline on GitHub Actions at 10:37
+UTC (06:37 EDT): crawl → regenerate dashboard → copy to `docs/index.html` →
+commit & push. GitHub Pages serves `docs/` on `main`, so the push is the deploy.
+The dashboard is regenerated and published **even when a search fails** — its
+stale-data banner reaching the hosted page is the alerting, and the job still
+goes red. Run it early from the Actions tab ("daily" → Run workflow).
 
-It's scheduled via launchd at 06:30 daily (`bin/launchd.plist.example`,
-installed at `~/Library/LaunchAgents/com.maximecaron.housing.plist`); launchd
-runs a missed job when the Mac wakes, which cron would skip. Output lands in
-`logs/launchd.log`. Manage it with:
+`data/housing.db` is committed alongside `docs/index.html` because it is the
+diff baseline: without the previous state there is no history to derive. It is
+the one thing under `data/` that git tracks. Raw responses and crawl logs are
+uploaded as build artifacts (90 and 30 days) rather than committed.
+
+This used to run on the laptop via launchd, which does not fire while the Mac is
+asleep — it runs the job at the next wake and coalesces everything it missed, so
+a lid shut over a weekend silently costs whole days (2026-08-08 has no crawl at
+all). `bin/launchd.plist.example` and `bin/daily.sh` are kept for running the
+pipeline by hand; the launchd agent should stay unloaded while Actions owns the
+schedule, or the two will both crawl and fight over the same commit.
+
+`crawl.js` distinguishes its exit codes: `1` means a search failed and the run
+should still publish, `2` means it refused to crawl at all (see below). The
+status is also in the `run` table.
+
+## The empty-baseline guard
+
+`openDb()` creates a database if none exists, which makes "state was never
+restored" look exactly like "first run ever". Crawling then records every
+listing as newly listed and delists them all the next day, destroying
+days-on-market. So `crawl.js` aborts with exit 2 before any request when the
+`listing` table is empty. A genuine first run needs `--bootstrap`:
 
 ```sh
-launchctl kickstart gui/$UID/com.maximecaron.housing   # run now
-launchctl bootout   gui/$UID ~/Library/LaunchAgents/com.maximecaron.housing.plist  # disable
+node src/crawl.js --bootstrap
 ```
 
-`crawl.js` exits non-zero if any search failed, so the run status is also
-visible in `launchctl list` and the `run` table.
+## Checking the scrapers from CI
+
+`.github/workflows/probe.yml` (manual trigger) hits both sources from a runner
+and reports the egress IP, without writing to the database or archiving
+anything. It answers "are we blocked from this network" — worth running before
+blaming the parser.
 
 ## Adding a search
 

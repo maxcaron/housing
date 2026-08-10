@@ -20,10 +20,15 @@ echo "=== $(date -u +%FT%TZ) daily run start"
 node src/crawl.js
 crawl_status=$?
 
+if [ "${crawl_status}" -ge 2 ]; then
+  echo "=== aborted before the network (crawl exit ${crawl_status}); publishing nothing"
+  exit "${crawl_status}"
+fi
+
 node src/report-html.js || exit 1
 cp data/report.html docs/index.html
 
-git add docs
+git add docs/index.html data/housing.db
 if ! git diff --cached --quiet; then
   git commit -q -m "daily data update $(date +%F)" && git push -q
   echo "published"

@@ -1,0 +1,92 @@
+name: daily
+
+on:
+  schedule:
+    - cron: '37 10 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    name: Crawl, publish, persist
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Crawl
+        id: crawl
+        run: |
+          set +e
+          node src/crawl.js
+          crawl_exit=$?
+          echo "exit=${crawl_exit}" >> "$GITHUB_OUTPUT"
+          if [ "${crawl_exit}" -ge 2 ]; then
+            echo "::error::crawl aborted with exit ${crawl_exit} before touching the network; publishing nothing"
+            exit "${crawl_exit}"
+          fi
+          exit 0
+
+      - name: Regenerate dashboard
+        run: |
+          node src/report-html.js
+          cp data/report.html docs/index.html
+
+      - name: Assert the write-ahead log is folded into housing.db
+        run: |
+          if command -v sqlite3 >/dev/null; then
+            sqlite3 data/housing.db "PRAGMA wal_checkpoint(TRUNCATE);"
+          fi
+          test ! -s data/housing.db-wal
+
+      - name: Publish
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html data/housing.db
+          if git diff --cached --quiet; then
+            echo "no changes to publish"
+            exit 0
+          fi
+          git commit -m "daily data update $(date +%F)"
+          git pull --rebase origin main
+          git push
+
+      - name: Upload crawl log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawl-log
+          path: logs/crawl-*.jsonl
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload raw responses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-responses
+          path: data/raw/
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Surface a failed crawl
+        if: steps.crawl.outputs.exit != '0'
+        run: |
+          echo "::error::a search failed (crawl exit ${{ steps.crawl.outputs.exit }}); the dashboard was published carrying its stale-data banner"
+          exit 1
