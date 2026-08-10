@@ -1,0 +1,33 @@
+name: probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reachability:
+    name: Can a GitHub runner reach Centris and DuProprio
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: node src/probe.js
+
+      - name: Upload probe log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-log
+          path: logs/probe-*.jsonl
+          retention-days: 7
+          if-no-files-found: warn
