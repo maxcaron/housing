@@ -44,6 +44,13 @@ diff baseline: without the previous state there is no history to derive. It is
 the one thing under `data/` that git tracks. Raw responses and crawl logs are
 uploaded as build artifacts (90 and 30 days) rather than committed.
 
+The price of tracking the database is that **a local crawl and the daily run
+both change a file git cannot merge**. Pull before working in the repo, and
+don't run the pipeline locally just to look at something — resolving a conflict
+on `housing.db` means picking one side and throwing away the other side's day.
+Use the probe workflow to test the scrapers instead; it writes nothing. If a
+local run really is needed: pull, run, push immediately.
+
 This used to run on the laptop via launchd, which does not fire while the Mac is
 asleep — it runs the job at the next wake and coalesces everything it missed, so
 a lid shut over a weekend silently costs whole days (2026-08-08 has no crawl at
