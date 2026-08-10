@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { log, logInit, ContractError } from './log.js';
 import * as centris from './centris.js';
 import * as duproprio from './duproprio.js';
-import { openDb, runStart, runFinish, lastOkCount, applyCrawl, saveDetails } from './db.js';
+import { openDb, runStart, runFinish, lastOkCount, applyCrawl, saveDetails, trackedListingCount } from './db.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -129,6 +129,20 @@ if (only) {
 
 logInit('crawl');
 const db = openDb();
+
+const bootstrapping = process.argv.includes('--bootstrap');
+if (!bootstrapping && trackedListingCount(db) === 0) {
+  log.fatal('empty_baseline', {
+    message:
+      'no listings in the database, so the previous state was not restored. ' +
+      'Crawling against an empty baseline would record every listing as newly listed ' +
+      'and delist them all on the next run. Pass --bootstrap for a genuine first run.',
+    db: path.relative(ROOT, path.join(ROOT, 'data', 'housing.db')),
+  });
+  db.close();
+  process.exit(2);
+}
+
 let ok = true;
 for (const search of searches) {
   ok = (await runOne(db, search)) && ok;

@@ -123,6 +123,10 @@ export function lastOkCount(db, search) {
     .get(search)?.count;
 }
 
+export function trackedListingCount(db) {
+  return db.prepare(`SELECT count(*) AS n FROM listing`).get().n;
+}
+
 // Apply one successful crawl atomically; returns event counts for the run summary.
 // `search` is the config entry ({name, type, ...}).
 // A new MLS matching a same-run vanished listing (same address, city, price) is a
