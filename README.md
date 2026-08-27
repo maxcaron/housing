@@ -30,21 +30,37 @@ date-range filters, and light/dark themes. It also shows a stale-data
 banner when the last crawl failed or is older than 48h. Regenerate it after each
 crawl (add `&& node src/report-html.js` to the cron line).
 
-## Daily automation & hosting
+## Automation & hosting
 
-`.github/workflows/daily.yml` runs the whole pipeline on GitHub Actions at 10:37
-UTC (06:37 EDT): crawl → regenerate dashboard → copy to `docs/index.html` →
-commit & push. GitHub Pages serves `docs/` on `main`, so the push is the deploy.
-The dashboard is regenerated and published **even when a search fails** — its
+`.github/workflows/daily.yml` runs the whole pipeline on GitHub Actions four
+times a day: crawl → regenerate dashboard → copy to `docs/index.html` → commit &
+push. GitHub Pages serves `docs/` on `main`, so the push is the deploy. The
+dashboard is regenerated and published **even when a search fails** — its
 stale-data banner reaching the hosted page is the alerting, and the job still
-goes red. Run it early from the Actions tab ("daily" → Run workflow).
+goes red. Run it off-schedule from the Actions tab ("crawl" → Run workflow).
+
+The four cron lines are UTC, anchored to Eastern *daylight* time, so from
+November to March each run lands an hour earlier locally:
+
+| cron (UTC) | EDT   | EST   |
+| ---------- | ----- | ----- |
+| `37 8`     | 04:37 | 03:37 |
+| `37 14`    | 10:37 | 09:37 |
+| `37 18`    | 14:37 | 13:37 |
+| `37 0`     | 20:37 | 19:37 |
+
+The `37` is deliberate: GitHub queues scheduled jobs hardest on the hour, and a
+run can be delayed by tens of minutes when it is scheduled there.
+
+Runs are serialized by a `concurrency` group rather than cancelled, so a slow
+crawl delays the next one instead of losing it.
 
 `data/housing.db` is committed alongside `docs/index.html` because it is the
 diff baseline: without the previous state there is no history to derive. It is
 the one thing under `data/` that git tracks. Raw responses and crawl logs are
 uploaded as build artifacts (90 and 30 days) rather than committed.
 
-The price of tracking the database is that **a local crawl and the daily run
+The price of tracking the database is that **a local crawl and the scheduled run
 both change a file git cannot merge**. Pull before working in the repo, and
 don't run the pipeline locally just to look at something — resolving a conflict
 on `housing.db` means picking one side and throwing away the other side's day.
@@ -57,6 +73,13 @@ a lid shut over a weekend silently costs whole days (2026-08-08 has no crawl at
 all). `bin/launchd.plist.example` and `bin/daily.sh` are kept for running the
 pipeline by hand; the launchd agent should stay unloaded while Actions owns the
 schedule, or the two will both crawl and fight over the same commit.
+
+Nothing in the pipeline is keyed to the calendar day — `listing` is current
+state and `event` is an append-only log of timestamped diffs — so a crawl that
+finds no change simply writes no events and publishes no commit. Crawling more
+often buys finer timestamps on price changes and delistings; it also means a
+listing that flickers out of one crawl's results is recorded as delisted and
+relisted hours later rather than a day later.
 
 `crawl.js` distinguishes its exit codes: `1` means a search failed and the run
 should still publish, `2` means it refused to crawl at all (see below). The

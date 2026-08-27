@@ -2,12 +2,13 @@
 
 ## GitHub Actions owns the data
 
-`.github/workflows/daily.yml` crawls at 10:37 UTC and commits `data/housing.db`
-and `docs/index.html` to `main`. `main` therefore has a second author that
-pushes every day.
+`.github/workflows/daily.yml` crawls four times a day (08:37, 14:37, 18:37 and
+00:37 UTC — 04:37/10:37/14:37/20:37 EDT) and commits `data/housing.db` and
+`docs/index.html` to `main`. `main` therefore has a second author that pushes
+several times a day.
 
-- Pull before editing anything. A checkout more than a day old will have its
-  first push rejected.
+- Pull before editing anything, and again before pushing. A checkout a few hours
+  old will have its first push rejected.
 - Do not run `node src/crawl.js` or `bin/daily.sh` casually to check something.
   Both mutate the tracked SQLite file, git cannot merge a binary, and resolving
   that conflict by picking a side silently discards a day of history. To test

@@ -1,15 +1,18 @@
-name: daily
+name: crawl
 
 on:
   schedule:
-    - cron: '37 10 * * *'
+    - cron: '37 8 * * *'
+    - cron: '37 14 * * *'
+    - cron: '37 18 * * *'
+    - cron: '37 0 * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: daily
+  group: crawl
   cancel-in-progress: false
 
 jobs:
@@ -63,7 +66,7 @@ jobs:
             echo "no changes to publish"
             exit 0
           fi
-          git commit -m "daily data update $(date +%F)"
+          git commit -m "data update $(date -u +%FT%RZ)"
           git pull --rebase origin main
           git push
 
