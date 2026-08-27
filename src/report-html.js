@@ -38,6 +38,7 @@ if (!lastOk) staleWarning = 'No successful crawl recorded yet.';
 
 const data = {
   generatedAt: new Date().toISOString(),
+  lastCrawlAt: lastOk?.finished_at ?? null,
   searches,
   listings,
   events,

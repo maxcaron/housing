@@ -470,6 +470,22 @@
       margin: 0;
     }
 
+    .dock-updated {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--text-muted);
+      font-size: 12px;
+      margin: 0;
+      padding-top: 12px;
+      border-top: 1px solid var(--grid);
+    }
+
+    .dock-updated time {
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+
     .rangeset {
       display: flex;
       border: 1px solid var(--border);
@@ -1329,6 +1345,7 @@
           <div class="chipset" id="source-chips" role="group" aria-label="Sources"></div>
         </div>
         <p class="hint">Range scopes activity (new / changes / delisted); area and type scope everything.</p>
+        <p class="dock-updated"><span>Data updated</span><time id="last-updated">—</time></p>
       </div>
     </div>
   </div>
@@ -1702,11 +1719,36 @@
         Object.entries(FILTER_DEFAULTS).some(([key, value]) => state[key] !== value);
       $('#settings-cog').dataset.filtered = String(narrowed);
     }
+    // Age is measured against the viewer's clock, not DATA.generatedAt, so a
+    // page left open overnight or served from cache still says how old it is.
+    const relativeTime = new Intl.RelativeTimeFormat('en-CA', { numeric: 'auto' });
+    function ageLabel(minutes) {
+      if (minutes < 1) return 'just now';
+      if (minutes < 60) return relativeTime.format(-minutes, 'minute');
+      const hours = Math.round(minutes / 60);
+      if (hours < 24) return relativeTime.format(-hours, 'hour');
+      return relativeTime.format(-Math.round(hours / 24), 'day');
+    }
+    function showLastUpdate() {
+      const slot = $('#last-updated');
+      if (!DATA.lastCrawlAt) {
+        slot.textContent = 'never';
+        slot.removeAttribute('datetime');
+        slot.removeAttribute('title');
+        return;
+      }
+      const at = new Date(DATA.lastCrawlAt);
+      slot.dateTime = DATA.lastCrawlAt;
+      slot.title = at.toLocaleString('en-CA');
+      slot.textContent = ageLabel(Math.round((Date.now() - at.getTime()) / 60000)) + ' · ' +
+        at.toLocaleString('en-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    }
     {
       const dock = $('#dock');
       const backdrop = $('#dock-backdrop');
       const cog = $('#settings-cog');
       const setOpen = (open) => {
+        if (open) showLastUpdate();
         dock.classList.toggle('open', open);
         backdrop.classList.toggle('open', open);
         cog.setAttribute('aria-expanded', String(open));
